@@ -9,8 +9,6 @@ a golang micro-service framework compatible with alibaba dubbo. just using jsonr
 >
 > dubbogo自己的server端也已经实现，即dubbogo既能调用java service也能调用dubbogo实现的service。
 >
-> 使用的时候就放到路径$/gopath}/github.com/AlexStocks/下面。
->
 > dubbogo 下一个版本(0.2.x)计划支持的codec 是dubbo(hessian)，transport protocol是tcp。
 >
 > QQ group: 196953050
