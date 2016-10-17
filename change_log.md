@@ -11,6 +11,15 @@ a golang micro-service framework compatible with alibaba dubbo. just using jsonr
 ## develop list ##
 ---
 
+### 2016-10-17 ###
+---
+- 1 修改dubbogo/zk/registry.go中DubboRole的定义(suggestion from 包增辉)
+    > zk/registry.go中DubboRole的定义应改成：
+    >
+    > DubboRole  = [...]string{"consumers", "", "", "providers"}
+    >
+    > 否则，dubbo java consumer来启动找provider url时，因为category不匹配，会找不到provider，导致consumer启动不了。
+
 ### 2016-08-18 ###
 ---
 - 1 基于go1.7，修正package context的路径；
@@ -19,7 +28,7 @@ a golang micro-service framework compatible with alibaba dubbo. just using jsonr
 ---
 - 1 测试过程中发现，dubbogo/registry/zk/registry.go:(zookeeperRegistry)validateZookeeperClient()之后使用了RegistryZkClient,修改如下代码：
     > a dubbogo/registry/zk/client.go:NewConsumerZookeeperRegistry()中调用newZookeeperRegistry后添加clause “reg.client.name = ConsumerRegistryZkClient";
-	> b dubbogo/registry/zk/server.go:NewProviderZookeeperRegistry()中调用newZookeeperRegistry后添加clause “reg.client.name = ProviderRegistryZkClient";
+    > b dubbogo/registry/zk/server.go:NewProviderZookeeperRegistry()中调用newZookeeperRegistry后添加clause “reg.client.name = ProviderRegistryZkClient";
 - 2 修正dubbogo/registry/zk/client.go和dubbogo/registry/zk/server.go中的同样处理zk重启事件的函数handleZkRestart中的相关逻辑
    此处须注意zk重启后会load之前的数据，导致启动之前注册的tmp节点数据又被load进来，大概10s之后才会被zk删除掉。
 - 3 修正dubbogo/transport/http_transport.go中有关httpTransport成员相关的grammar error
@@ -28,8 +37,8 @@ a golang micro-service framework compatible with alibaba dubbo. just using jsonr
 ---
 - 1 测试过程中发现，如果一个zkPath下的node为空，而后添加一个node的时候，dubbo/registry/zk/watch.go:(zookeeperWatcher)watchDir()函数中for-select clause中time.After会导致watcher不能及时收到相关的event，如果剔除time.After又会导致疯狂for-select以致于影响程序性能，现做以下修改:
 
-	> a dubbo/registry/zk/zk_client.go中添加zookeeperClienit{entryRegistry}以及相关函数;
-	b dubbo/registry/zk/watch.go:(zookeeperWatcher)watchDir() for-select添加一个case分支，以处理zkClient发来的event;
+    > a dubbo/registry/zk/zk_client.go中添加zookeeperClienit{entryRegistry}以及相关函数;
+    b dubbo/registry/zk/watch.go:(zookeeperWatcher)watchDir() for-select添加一个case分支，以处理zkClient发来的event;
 
 
 所以发生所有服务死掉的情况时，dubbogo的服务发现过程为:
@@ -39,7 +48,7 @@ b 第二个service启动后，dubbogo/registry/zk:(zookeeperWatcher) watchDir()�
 
 - 2 测试过程发现dubbogo/registry/zk:zookeeperClient) handleZkEvent()已经能够应对zk启停(死掉重启)的情况，所以注释掉这两个函数:
 
-	> a dubbogo/registry/zk:(consumerZookeeperRegistry)reconnectZkRegistr()
+    > a dubbogo/registry/zk:(consumerZookeeperRegistry)reconnectZkRegistr()
     > b dubbogo/registry/zk:(providerZookeeperRegistry)reconnectZkRegistr()
 
 ### 2016-08-10 ###
@@ -49,7 +58,7 @@ b 第二个service启动后，dubbogo/registry/zk:(zookeeperWatcher) watchDir()�
 - 3 dubbogo/registry/zk/client.go:(consumerZookeeperRegistry)Watch中，把for循环中的zkWatcher.watchService另起一个goroutine进行异步化操作，以防止阻塞for-loop。
 - 4 dubbogo/registry/zk/watch.go:(zookeeperWatcher)watchService中，注释掉给this.events发送error的代码
 
-	 > 不要发送不必要的error给selector，以防止selector/cache/cache.go:(cacheSelector)watch，调用(zookeeperWatcher)Next获取error后，不断退出
+     > 不要发送不必要的error给selector，以防止selector/cache/cache.go:(cacheSelector)watch，调用(zookeeperWatcher)Next获取error后，不断退出
 
 - 5 为了dubbogo/registry/client与registry连接断开的情况下，dubbogo/selector能继续稳定地提供服务，修改：
 
@@ -80,7 +89,7 @@ b 第二个service启动后，dubbogo/registry/zk:(zookeeperWatcher) watchDir()�
 ### 2016-08-06 ###
 ---
 - 1 为了让dubbogo/client/rpc_pool.go只保存长连接对象:
-	> 给dubbogo/client/rpc_client.go:call 中this.pool.getConn函数调用下面的defer语句段添加StreamingRequest判断条件
+    > 给dubbogo/client/rpc_client.go:call 中this.pool.getConn函数调用下面的defer语句段添加StreamingRequest判断条件
 - 2 为了检查consumerZookeeperRegistry:Getservice()获取不到service的serviceURL的错误，先给GetService函数和Register函数添加debug log
 - 3 把dubbogo/registry/zk/client.go中consumerZookeeperRegistry:services的key由ServiceConfig.String()修改为ServiceConfig.Service，以防止consumerZookeeperRegistry:GetService时检查service是否注册时被提示没有注册的error
 
@@ -100,67 +109,67 @@ b 第二个service启动后，dubbogo/registry/zk:(zookeeperWatcher) watchDir()�
 ---
 - 1 由于昨天第二项改进后引入了一个新的bug，使得dubbogo/codec/jsonrpc/client.go:(clientCodec)ReadHead中找不到response id对应的method
 
-	> 详细的修改内容见函数dubbogo/codec/jsonrpc/client.go:(clientCodec)Write里面的注释
+    > 详细的修改内容见函数dubbogo/codec/jsonrpc/client.go:(clientCodec)Write里面的注释
 
 ### 2016-08-02 ###
 ---
 - 1 根据下面panic记录修改 registry/zk/zk_client.go, 确保zookeeperClient{conn}为nil的情况下程序不会panic
-	// panic 1
-	2016/08/01 11:10:26 Recv loop terminated: err=read tcp 116.211.15.192:59987->116.211.15.190:2181: i/o timeout
-	2016/08/01 11:10:26 Send loop terminated: err=<nil>
-	[08/01/16 11:10:26] [WARN] get a zookeeper event{zk.Event{Type:-1, State:0, Path:"", Err:error(nil), Server:"116.211.15.190:2181"}}, state{0}:zookeeper disconnected
-	[08/01/16 11:10:26] [WARN] zk{addr:[116.211.15.190:2181]} state is StateDisconnected, so close the zk client{name:zk registry}.
-	[08/01/16 11:10:26] [INFO] zk{path:[116.211.15.190:2181], name:zk registry} connection goroutine game over.
-	2016/08/01 11:10:26 Recv loop terminated: err=read tcp 116.211.15.192:59988->116.211.15.190:2181: i/o timeout
-	2016/08/01 11:10:26 Send loop terminated: err=<nil>
-	[08/01/16 11:10:26] [WARN] get a zookeeper event{zk.Event{Type:-1, State:0, Path:"", Err:error(nil), Server:"116.211.15.190:2181"}}, state{0}:zookeeper disconnected
-	panic: runtime error: invalid memory address or nil pointer dereference
-	[signal 0xb code=0x1 addr=0x0 pc=0x888db8]
+    // panic 1
+    2016/08/01 11:10:26 Recv loop terminated: err=read tcp 116.211.15.192:59987->116.211.15.190:2181: i/o timeout
+    2016/08/01 11:10:26 Send loop terminated: err=<nil>
+    [08/01/16 11:10:26] [WARN] get a zookeeper event{zk.Event{Type:-1, State:0, Path:"", Err:error(nil), Server:"116.211.15.190:2181"}}, state{0}:zookeeper disconnected
+    [08/01/16 11:10:26] [WARN] zk{addr:[116.211.15.190:2181]} state is StateDisconnected, so close the zk client{name:zk registry}.
+    [08/01/16 11:10:26] [INFO] zk{path:[116.211.15.190:2181], name:zk registry} connection goroutine game over.
+    2016/08/01 11:10:26 Recv loop terminated: err=read tcp 116.211.15.192:59988->116.211.15.190:2181: i/o timeout
+    2016/08/01 11:10:26 Send loop terminated: err=<nil>
+    [08/01/16 11:10:26] [WARN] get a zookeeper event{zk.Event{Type:-1, State:0, Path:"", Err:error(nil), Server:"116.211.15.190:2181"}}, state{0}:zookeeper disconnected
+    panic: runtime error: invalid memory address or nil pointer dereference
+    [signal 0xb code=0x1 addr=0x0 pc=0x888db8]
 
-	goroutine 16 [running]:
-	panic(0xa2e9e0, 0xc82000a0e0)
-	        C:/Program Files (x86)/Console2/go1.6.2/src/runtime/panic.go:481 +0x3e6
-	github.com/samuel/go-zookeeper/zk.(*Conn).nextXid(0x0, 0xc800000000)
-	        C:/Users/AlexStocks/share/test/golang/lib/src/github.com/samuel/go-zookeeper/zk/conn.go:671 +0x58
-	github.com/samuel/go-zookeeper/zk.(*Conn).queueRequest(0x0, 0xc, 0x9083c0, 0xc820132d80, 0x908420, 0xc820b3e060, 0xc820177590, 0x0)
-	        C:/Users/AlexStocks/share/test/golang/lib/src/github.com/samuel/go-zookeeper/zk/conn.go:686 +0x31
-	github.com/samuel/go-zookeeper/zk.(*Conn).request(0x0, 0xc80000000c, 0x9083c0, 0xc820132d80, 0x908420, 0xc820b3e060, 0xc820177590, 0x0, 0x0, 0x0)
-	        C:/Users/AlexStocks/share/test/golang/lib/src/github.com/samuel/go-zookeeper/zk/conn.go:698 +0x92
-	:209jjjjjj
-	dubbogo/registry/zk.(*zookeeperClient).getChildrenW(0xc82014a000, 0xc8201b0600, 0x34, 0x0, 0x0, 0x0, 0xc820a11730, 0x0, 0x0)
-	        C:/Users/AlexStocks/share/test/golang/lib/src/dubbogo/registry/zk/zk_client.go:236 +0xc1
-	dubbogo/registry/zk.(*zookeeperWatcher).watchDir(0xc82000b710, 0xc8201b0600, 0x34)
-	        C:/Users/AlexStocks/share/test/golang/lib/src/dubbogo/registry/zk/watch.go:98 +0xe8
-	dubbogo/registry/zk.(*zookeeperWatcher).watchService.func2(0xc82000b710, 0xc8201b0600, 0x34)
-	        C:/Users/AlexStocks/share/test/golang/lib/src/dubbogo/registry/zk/watch.go:215 +0x77
-	created by dubbogo/registry/zk.(*zookeeperWatcher).watchService
-	        C:/Users/AlexStocks/share/test/golang/lib/src/dubbogo/registry/zk/watch.go:217 +0x317
+    goroutine 16 [running]:
+    panic(0xa2e9e0, 0xc82000a0e0)
+            C:/Program Files (x86)/Console2/go1.6.2/src/runtime/panic.go:481 +0x3e6
+    github.com/samuel/go-zookeeper/zk.(*Conn).nextXid(0x0, 0xc800000000)
+            C:/Users/AlexStocks/share/test/golang/lib/src/github.com/samuel/go-zookeeper/zk/conn.go:671 +0x58
+    github.com/samuel/go-zookeeper/zk.(*Conn).queueRequest(0x0, 0xc, 0x9083c0, 0xc820132d80, 0x908420, 0xc820b3e060, 0xc820177590, 0x0)
+            C:/Users/AlexStocks/share/test/golang/lib/src/github.com/samuel/go-zookeeper/zk/conn.go:686 +0x31
+    github.com/samuel/go-zookeeper/zk.(*Conn).request(0x0, 0xc80000000c, 0x9083c0, 0xc820132d80, 0x908420, 0xc820b3e060, 0xc820177590, 0x0, 0x0, 0x0)
+            C:/Users/AlexStocks/share/test/golang/lib/src/github.com/samuel/go-zookeeper/zk/conn.go:698 +0x92
+    :209jjjjjj
+    dubbogo/registry/zk.(*zookeeperClient).getChildrenW(0xc82014a000, 0xc8201b0600, 0x34, 0x0, 0x0, 0x0, 0xc820a11730, 0x0, 0x0)
+            C:/Users/AlexStocks/share/test/golang/lib/src/dubbogo/registry/zk/zk_client.go:236 +0xc1
+    dubbogo/registry/zk.(*zookeeperWatcher).watchDir(0xc82000b710, 0xc8201b0600, 0x34)
+            C:/Users/AlexStocks/share/test/golang/lib/src/dubbogo/registry/zk/watch.go:98 +0xe8
+    dubbogo/registry/zk.(*zookeeperWatcher).watchService.func2(0xc82000b710, 0xc8201b0600, 0x34)
+            C:/Users/AlexStocks/share/test/golang/lib/src/dubbogo/registry/zk/watch.go:215 +0x77
+    created by dubbogo/registry/zk.(*zookeeperWatcher).watchService
+            C:/Users/AlexStocks/share/test/golang/lib/src/dubbogo/registry/zk/watch.go:217 +0x317
 
-	2016/08/02 14:29:57 Recv loop terminated: err=read tcp 116.211.15.192:39716->116.211.15.190:2181: i/o timeout
-	2016/08/02 14:29:57 Send loop terminated: err=<nil>
-	panic: runtime error: invalid memory address or nil pointer dereference
-	[signal 0xb code=0x1 addr=0x0 pc=0x888db8]
+    2016/08/02 14:29:57 Recv loop terminated: err=read tcp 116.211.15.192:39716->116.211.15.190:2181: i/o timeout
+    2016/08/02 14:29:57 Send loop terminated: err=<nil>
+    panic: runtime error: invalid memory address or nil pointer dereference
+    [signal 0xb code=0x1 addr=0x0 pc=0x888db8]
 
-	// panic 2
-	goroutine 49 [running]:
-	panic(0xa2e9e0, 0xc82000a0e0)
-	        C:/Program Files (x86)/Console2/go1.6.2/src/runtime/panic.go:481 +0x3e6
-	github.com/samuel/go-zookeeper/zk.(*Conn).nextXid(0x0, 0xc800000000)
-	        C:/Users/AlexStocks/share/test/golang/lib/src/github.com/samuel/go-zookeeper/zk/conn.go:671 +0x58
-	github.com/samuel/go-zookeeper/zk.(*Conn).queueRequest(0x0, 0x3, 0x908240, 0xc8201cd2e0, 0x9082a0, 0xc820510cd0, 0xc820ca7c50, 0x0)
-	        C:/Users/AlexStocks/share/test/golang/lib/src/github.com/samuel/go-zookeeper/zk/conn.go:686 +0x31
-	github.com/samuel/go-zookeeper/zk.(*Conn).request(0x0, 0xc800000003, 0x908240, 0xc8201cd2e0, 0x9082a0, 0xc820510cd0, 0xc820ca7c50, 0x0, 0x0, 0x0)
-	        C:/Users/AlexStocks/share/test/golang/lib/src/github.com/samuel/go-zookeeper/zk/conn.go:698 +0x92
-	github.com/samuel/go-zookeeper/zk.(*Conn).ExistsW(0x0, 0xc82006e1a0, 0x19e, 0xc82002d000, 0x0, 0x0, 0x0, 0x0)
-	        C:/Users/AlexStocks/share/test/golang/lib/src/github.com/samuel/go-zookeeper/zk/conn.go:833 +0x293
-	dubbogo/registry/zk.(*zookeeperClient).existW(0xc820016480, 0xc82006e1a0, 0x19e, 0x1, 0x0, 0x0)
-	        C:/Users/AlexStocks/share/test/golang/lib/src/dubbogo/registry/zk/zk_client.go:289 +0x8d
-	dubbogo/registry/zk.(*zookeeperWatcher).watchServiceNode(0xc820504a80, 0xc82006e1a0, 0x19e)
-	        C:/Users/AlexStocks/share/test/golang/lib/src/dubbogo/registry/zk/watch.go:59 +0xb9
-	dubbogo/registry/zk.(*zookeeperWatcher).watchService.func1(0xc820504a80, 0xc820504ae0, 0xc82006e1a0, 0x19e, 0xc8200a41b0)
-	        C:/Users/AlexStocks/share/test/golang/lib/src/dubbogo/registry/zk/watch.go:205 +0x4b
-	created by dubbogo/registry/zk.(*zookeeperWatcher).watchService
-	        C:/Users/AlexStocks/share/test/golang/lib/src/dubbogo/registry/zk/watch.go:209 +0x1016
+    // panic 2
+    goroutine 49 [running]:
+    panic(0xa2e9e0, 0xc82000a0e0)
+            C:/Program Files (x86)/Console2/go1.6.2/src/runtime/panic.go:481 +0x3e6
+    github.com/samuel/go-zookeeper/zk.(*Conn).nextXid(0x0, 0xc800000000)
+            C:/Users/AlexStocks/share/test/golang/lib/src/github.com/samuel/go-zookeeper/zk/conn.go:671 +0x58
+    github.com/samuel/go-zookeeper/zk.(*Conn).queueRequest(0x0, 0x3, 0x908240, 0xc8201cd2e0, 0x9082a0, 0xc820510cd0, 0xc820ca7c50, 0x0)
+            C:/Users/AlexStocks/share/test/golang/lib/src/github.com/samuel/go-zookeeper/zk/conn.go:686 +0x31
+    github.com/samuel/go-zookeeper/zk.(*Conn).request(0x0, 0xc800000003, 0x908240, 0xc8201cd2e0, 0x9082a0, 0xc820510cd0, 0xc820ca7c50, 0x0, 0x0, 0x0)
+            C:/Users/AlexStocks/share/test/golang/lib/src/github.com/samuel/go-zookeeper/zk/conn.go:698 +0x92
+    github.com/samuel/go-zookeeper/zk.(*Conn).ExistsW(0x0, 0xc82006e1a0, 0x19e, 0xc82002d000, 0x0, 0x0, 0x0, 0x0)
+            C:/Users/AlexStocks/share/test/golang/lib/src/github.com/samuel/go-zookeeper/zk/conn.go:833 +0x293
+    dubbogo/registry/zk.(*zookeeperClient).existW(0xc820016480, 0xc82006e1a0, 0x19e, 0x1, 0x0, 0x0)
+            C:/Users/AlexStocks/share/test/golang/lib/src/dubbogo/registry/zk/zk_client.go:289 +0x8d
+    dubbogo/registry/zk.(*zookeeperWatcher).watchServiceNode(0xc820504a80, 0xc82006e1a0, 0x19e)
+            C:/Users/AlexStocks/share/test/golang/lib/src/dubbogo/registry/zk/watch.go:59 +0xb9
+    dubbogo/registry/zk.(*zookeeperWatcher).watchService.func1(0xc820504a80, 0xc820504ae0, 0xc82006e1a0, 0x19e, 0xc8200a41b0)
+            C:/Users/AlexStocks/share/test/golang/lib/src/dubbogo/registry/zk/watch.go:205 +0x4b
+    created by dubbogo/registry/zk.(*zookeeperWatcher).watchService
+            C:/Users/AlexStocks/share/test/golang/lib/src/dubbogo/registry/zk/watch.go:209 +0x1016
 
 - 2 jsonrpc java端程序不能解析jsonrpc 2.0中id超过uint32_max的数字, 在dubbogo/codec/jsonrpc/client.go对Id进行mask(MAX_JSONRPC_ID)运算，防止其超过int32_max
      return error{"code":-32603,"message":"json: cannot unmarshal number -1874143215 into Go value of type uint64"}
@@ -181,23 +190,23 @@ b 第二个service启动后，dubbogo/registry/zk:(zookeeperWatcher) watchDir()�
 ---
 - 1 参照effecive go的leaky buffer的例子，修改dubbogo/server/rpc_server.go的server:
 
-	 type server struct {
-	 	mu         sync.Mutex          // protects the serviceMap
-	 	serviceMap map[string]*service // service name -> service
-	 	// reqLock    sync.Mutex          // protects freeReq
-	 	// freeReq    *request
-	 	freeReq chan *request
-	 	// respLock sync.Mutex // protects freeRsp
-	 	// freeRsp *response
-	 	freeRsp  chan *response
-	 	listener transport.Listener
-	 }
+     type server struct {
+         mu         sync.Mutex          // protects the serviceMap
+         serviceMap map[string]*service // service name -> service
+         // reqLock    sync.Mutex          // protects freeReq
+         // freeReq    *request
+         freeReq chan *request
+         // respLock sync.Mutex // protects freeRsp
+         // freeRsp *response
+         freeRsp  chan *response
+         listener transport.Listener
+     }
 
      把lock和list修改为一个有size限制的req/rsp chan，通过select把锁也省略掉.
 
 - 2 参考net/netutil/listen.go进行最大连接数限制
      type httpTransportListener {
-     	sem chan struct{}
+         sem chan struct{}
      }
 - 3 给dubbogo/client & dubbogo/server添加once，以确保安全退出
 
@@ -205,7 +214,7 @@ b 第二个service启动后，dubbogo/registry/zk:(zookeeperWatcher) watchDir()�
 ---
 - 1 dubbogo/selector/cache/cache.go
     var (
-	// selector每15分钟通过tick函数清空cache或者get函数去清空某个service的cache，
+    // selector每15分钟通过tick函数清空cache或者get函数去清空某个service的cache，
         // 以全量获取某个service的所有providers
         DefaultTTL = 5 * time.Minute
     )
@@ -221,8 +230,8 @@ b 第二个service启动后，dubbogo/registry/zk:(zookeeperWatcher) watchDir()�
 
 - 4 dubbogo/registry/zk/watch.go
     const (
-	ZK_DELAY                    = 3  // watchDir中使用，防止不断地对zk重连
-	MAX_TIMES               = 10 // 设置(wathcer)watchDir()等待时长
-	Wactch_Event_Channel_Size   = 32 // 用于设置通知selector的event channel的size
-	ZKCLIENT_EVENT_CHANNEL_SIZE = 4  // 设置用于zk client与watcher&consumer&provider之间沟通的channel的size
+    ZK_DELAY                    = 3  // watchDir中使用，防止不断地对zk重连
+    MAX_TIMES               = 10 // 设置(wathcer)watchDir()等待时长
+    Wactch_Event_Channel_Size   = 32 // 用于设置通知selector的event channel的size
+    ZKCLIENT_EVENT_CHANNEL_SIZE = 4  // 设置用于zk client与watcher&consumer&provider之间沟通的channel的size
     )

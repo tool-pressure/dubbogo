@@ -12,8 +12,9 @@ package version
 
 const (
 	// dubbogo version
-	Version       string = "0.1.1"
+	Version       string = "0.1.2"
+	DATE                 = "2016/10/17"
 	DUBBOGO_MAJOR        = 0
 	DUBBOGO_MINOR        = 1
-	DUBBOGO_BUILD        = 1
+	DUBBOGO_BUILD        = 2
 )
