@@ -11,6 +11,10 @@ a golang micro-service framework compatible with alibaba dubbo. just using jsonr
 ## develop list ##
 ---
 
+### 2016-10-19 ###
+---
+- 1 调整dubbogo/server下几个文件的名称，并且让server和rpcServer两个struct交换名称，以消除源码名称与其包含的struct名称不一致带来的歧义;
+
 ### 2016-10-17 ###
 ---
 - 1 修改dubbogo/zk/registry.go中DubboRole的定义(suggestion from 包增辉)

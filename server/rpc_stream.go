@@ -90,7 +90,7 @@ func (r *rpcStream) Close() error {
 	r.closed = true
 	// fmt.Println("rpcStream.Close")
 	// rpcCodec.Close -> rpcCodec.socket.Close -> transport.Close()，
-	// 但其实这个路线不会被执行，参见func (this *rpcServer) handlePkg(servo interface{}, sock transport.Socket)里面的defer语句块，
+	// 但其实这个路线不会被执行，参见func (this *server) handlePkg(servo interface{}, sock transport.Socket)里面的defer语句块，
 	// 只有transport.Close()会被执行
 	return r.codec.Close()
 }

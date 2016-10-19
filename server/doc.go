@@ -13,7 +13,7 @@ package server
 /*
 // consumer: rpc client -> rpc stream -> rpc codec -> transport + codec
 // provider: rpc server -> rpc stream -> rpc codec -> transport + codec
-func (this *rpcServer) handlePkg(servo interface{}, sock transport.Socket) {
+func (this *server) handlePkg(servo interface{}, sock transport.Socket) {
 	sock.Recv(&msg) // msg = transport.Message
 	// func (r *rpcStream) Recv(msg interface{}) error {
 	// 	 r.codec.ReadRequestHeader(&req, false)

@@ -109,7 +109,7 @@ type response struct {
 }
 
 // server represents an RPC Server.
-type server struct {
+type rpcServer struct {
 	mu         sync.Mutex          // protects the serviceMap
 	serviceMap map[string]*service // service name -> service
 	freeReq    chan *request
@@ -121,8 +121,8 @@ const (
 	FREE_LIST_SIZE = 4 * 1024
 )
 
-func initServer() *server {
-	return &server{
+func initServer() *rpcServer {
+	return &rpcServer{
 		serviceMap: make(map[string]*service),
 		freeReq:    make(chan *request, FREE_LIST_SIZE),
 		freeRsp:    make(chan *response, FREE_LIST_SIZE),
@@ -217,7 +217,7 @@ func prepareMethod(method reflect.Method) *methodType {
 	return &methodType{method: method, ArgType: argType, ReplyType: replyType, ContextType: contextType, stream: stream}
 }
 
-func (server *server) register(rcvr Handler) (string, error) {
+func (server *rpcServer) register(rcvr Handler) (string, error) {
 	var (
 		num     int
 		s       *service
@@ -274,7 +274,7 @@ func (server *server) register(rcvr Handler) (string, error) {
 }
 
 // 调用codec.WriteResponse
-func (server *server) sendResponse(sending *sync.Mutex, req *request, reply interface{}, codec serverCodec, errmsg string, last bool) (err error) {
+func (server *rpcServer) sendResponse(sending *sync.Mutex, req *request, reply interface{}, codec serverCodec, errmsg string, last bool) (err error) {
 	resp := server.getResponse()
 	// Encode the response header
 	resp.Service = req.Service
@@ -294,7 +294,7 @@ func (server *server) sendResponse(sending *sync.Mutex, req *request, reply inte
 	return err
 }
 
-func (s *service) call(ctx context.Context, server *server, sending *sync.Mutex, mtype *methodType, req *request, argv, replyv reflect.Value, codec serverCodec, ct string) {
+func (s *service) call(ctx context.Context, server *rpcServer, sending *sync.Mutex, mtype *methodType, req *request, argv, replyv reflect.Value, codec serverCodec, ct string) {
 	var (
 		err          error
 		errmsg       string
@@ -389,7 +389,7 @@ func (m *methodType) prepareContext(ctx context.Context) reflect.Value {
 	return reflect.Zero(m.ContextType)
 }
 
-func (server *server) serveRequest(ctx context.Context, codec serverCodec, ct string) error {
+func (server *rpcServer) serveRequest(ctx context.Context, codec serverCodec, ct string) error {
 	sending := new(sync.Mutex)
 	service, mtype, req, argv, replyv, keepReading, err := server.readRequest(codec)
 	if err != nil {
@@ -410,7 +410,7 @@ func (server *server) serveRequest(ctx context.Context, codec serverCodec, ct st
 	return nil
 }
 
-func (server *server) getRequest() *request {
+func (server *rpcServer) getRequest() *request {
 	var req *request
 	// Grab a request if available; allocate if not.
 	select {
@@ -425,7 +425,7 @@ func (server *server) getRequest() *request {
 	return req
 }
 
-func (server *server) freeRequest(req *request) {
+func (server *rpcServer) freeRequest(req *request) {
 	if req != nil {
 		// Reuse request there's room.
 		select {
@@ -437,7 +437,7 @@ func (server *server) freeRequest(req *request) {
 	}
 }
 
-func (server *server) getResponse() *response {
+func (server *rpcServer) getResponse() *response {
 	var rsp *response
 	// Grab a response if available; allocate if not.
 	select {
@@ -452,7 +452,7 @@ func (server *server) getResponse() *response {
 	return rsp
 }
 
-func (server *server) freeRsponse(rsp *response) {
+func (server *rpcServer) freeRsponse(rsp *response) {
 	if rsp != nil {
 		// Reuse response there's room.
 		select {
@@ -467,7 +467,7 @@ func (server *server) freeRsponse(rsp *response) {
 
 // step1: codec.ReadRequestHeader
 // step2: codec.ReadBody
-func (server *server) readRequest(codec serverCodec) (service *service, mtype *methodType, req *request, argv, replyv reflect.Value, keepReading bool, err error) {
+func (server *rpcServer) readRequest(codec serverCodec) (service *service, mtype *methodType, req *request, argv, replyv reflect.Value, keepReading bool, err error) {
 	service, mtype, req, keepReading, err = server.readRequestHeader(codec)
 	if err != nil {
 		if !keepReading {
@@ -506,7 +506,7 @@ func (server *server) readRequest(codec serverCodec) (service *service, mtype *m
 }
 
 // @keepRaading 为true，则说明读取header成功
-func (server *server) readRequestHeader(codec serverCodec) (service *service, mtype *methodType, req *request, keepReading bool, err error) {
+func (server *rpcServer) readRequestHeader(codec serverCodec) (service *service, mtype *methodType, req *request, keepReading bool, err error) {
 	// Grab the request header.
 	req = server.getRequest() // 从server.freeReq中回去一个request
 	err = codec.ReadRequestHeader(req, true)

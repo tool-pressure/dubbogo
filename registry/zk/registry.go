@@ -12,16 +12,17 @@ package zookeeper
 
 import (
 	"sync"
+	"time"
 )
 
 import (
+	"github.com/AlexStocks/gocolor"
 	log "github.com/AlexStocks/log4go"
 )
 
 import (
 	"github.com/AlexStocks/dubbogo/common"
 	"github.com/AlexStocks/dubbogo/registry"
-	"time"
 )
 
 //////////////////////////////////////////////
@@ -39,7 +40,7 @@ const (
 
 var (
 	DubboNodes = [...]string{"consumers", "configurators", "routers", "providers"}
-	// dubbo java consumer来启动找provider url时，因为category不匹配，会找不到provider，导致consumer启动不了
+	// dubbo java consumer来启动找provider url时，因为category不匹配，会找不到provider，导致consumer启动不了,所以使用consumers&providers
 	// DubboRole               = [...]string{"consumer", "", "", "provider"}
 	DubboRole               = [...]string{"consumers", "", "", "providers"} //
 	RegistryZkClient string = "zk registry"
@@ -159,6 +160,7 @@ func (this *zookeeperRegistry) registerZookeeperNode(root string, data []byte) e
 		zkPath string
 	)
 
+	gocolor.Debug("register path{root:%s}", root)
 	// 假设root是/dubbo/com.ofpay.demo.api.UserProvider/consumers/jsonrpc，则创建完成的时候zkPath
 	// 是/dubbo/com.ofpay.demo.api.UserProvider/consumers/jsonrpc/0000000000之类的临时节点.
 	// 这个节点在连接有效的时候回一直存在，直到退出的时候才会被删除。
