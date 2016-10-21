@@ -1,3 +1,38 @@
+# dubbo 分析 #
+---
+*written by AlexStocks*
+
+## dubbo & zk ##
+---
+
+dubbo.xml 相关内容如下:
+
+  <bean id="demoService" class="com.ikurento.user.UserProviderImpl" />   
+  <bean id="otherService" class="com.ikurento.user.UserProviderAnotherImpl"/>   
+
+  <dubbo:service interface="com.ikurento.user.UserProvider" ref="demoService"/>   
+  <dubbo:service interface="com.ikurento.user.UserProvider" ref="otherService" version="2.0"/>   
+ 
+  <dubbo:protocol id="dubbo" name="dubbo" port="20000" />
+  <dubbo:protocol id="jsonrpc" name="jsonrpc" port="10000" />
+
+  zk path(/dubbo/com.ikurento.user.UserProvider/providers)下的url列表如下：
+
+   jsonrpc://192.168.35.1:10000/com.ikurento.user.UserProvider2?anyhost=true&application=user-info-server&default.timeout=10000&dubbo=2.4.10&environment=product&interface=com.ikurento.user.UserProvider&methods=getUser,isLimit,queryAll,queryUser,GetUser&owner=AlexStocks&pid=8604&revision=0.1.0&side=provider&timestamp=1476890290246&version=2.0
+
+   jsonrpc://192.168.35.1:10000/com.ikurento.user.UserProvider3?anyhost=true&application=user-info-server&default.timeout=10000&dubbo=2.4.10&environment=product&group=as&interface=com.ikurento.user.UserProvider&methods=getUser,isLimit,queryAll,queryUser,GetUser&owner=AlexStocks&pid=8604&revision=0.1.0&side=provider&timestamp=1476890290293&version=2.0
+
+   jsonrpc://192.168.35.1:10000/com.ikurento.user.UserProvider?anyhost=true&application=user-info-server&default.timeout=10000&dubbo=2.4.10&environment=product&interface=com.ikurento.user.UserProvider&methods=getUser,isLimit,queryAll,queryUser,GetUser&owner=AlexStocks&pid=8604&revision=0.1.0&side=provider&timestamp=1476890289997
+
+   dubbo://192.168.35.1:20000/com.ikurento.user.UserProvider2?anyhost=true&application=user-info-server&default.timeout=10000&dubbo=2.4.10&environment=product&interface=com.ikurento.user.UserProvider&methods=getUser,isLimit,queryAll,queryUser,GetUser&owner=AlexStocks&pid=8604&revision=0.1.0&side=provider&timestamp=1476890290221&version=2.0
+
+   dubbo://192.168.35.1:20000/com.ikurento.user.UserProvider?anyhost=true&application=user-info-server&default.timeout=10000&dubbo=2.4.10&environment=product&interface=com.ikurento.user.UserProvider&methods=getUser,isLimit,queryAll,queryUser,GetUser&owner=AlexStocks&pid=8604&revision=0.1.0&side=provider&timestamp=1476890289330
+
+   dubbo://192.168.35.1:20000/com.ikurento.user.UserProvider3?anyhost=true&application=user-info-server&default.timeout=10000&dubbo=2.4.10&environment=product&group=as&interface=com.ikurento.user.UserProvider&methods=getUser,isLimit,queryAll,queryUser,GetUser&owner=AlexStocks&pid=8604&revision=0.1.0&side=provider&timestamp=1476890290272&version=2.0
+
+  从以上生成结果来看:   
+  - 1 url path = protocol://host:port/interface + index   
+  - 2 protocol + interface + group + version唯一的对应一个service(goang的struct)
 
 ## hessian & dubbo ##
 ---
@@ -73,7 +108,7 @@ A: 因为服务的现状大都是服务提供者少，通常只有几台机器�
 ### Design Goals ###
 ---
 
-它自身是一个轻量二进制协议，用于替换XML-based web服务协议。虽然使用了二进制，Hessian具有自描述和跨语言特性。为web服务的连接协议应该对应用程序写者来说不可见，不需要额外的shema或者IDL去描述它。基于EJB环境，Hessian协议有以下特性：      
+它自身是一个轻量二进制协议，用于替换XML-based web服务协议。虽然使用了二进制，Hessian具有自描述和跨语言特性。为web服务的连接协议应该对应用程序写者来说不可见，不需要额外的shema或者IDL去描述它。基于EJB环境，Hessian协议有以下特性：
     * 必须支持XML作为第一个类对象
     * 不需要额外的schema or IDL，对写者不可见
     * 能够序列化Java对象
@@ -83,11 +118,11 @@ A: 因为服务的现状大都是服务提供者少，通常只有几台机器�
     * 足够简单，方便测试
     * 序列化速度足够快
     * 支持事务
-    
+
 ### Serialization ###
 ---
 
-Hessian有以下九种基本类型：   
+Hessian有以下九种基本类型：
     * boolean
     * 32-bit int
     * 64-bit long
@@ -97,12 +132,12 @@ Hessian有以下九种基本类型：
     * UTF8-encoded xml
     * raw binary data
     * remote objects
-    
-Hessian有两种复合类型:   
+
+Hessian有两种复合类型:
     * list for lists and arrays
     * map for objects and hash tables.
-    
-Hessian有两种特殊的结构体：   
+
+Hessian有两种特殊的结构体：
     * null for null values
     * ref for shared and circular object references.
 
@@ -198,7 +233,7 @@ V t x00 x04 [int
   I x00 x00 x00 x00
   I x00 x00 x00 x01
   z
-  
+
 不指定长度不指定类型list = {0, "foobar"}序列化后结果：
 V I x00 x00 x00 x00
   S x00 x06 foobar
@@ -206,7 +241,7 @@ V I x00 x00 x00 x00
 
 注意：The valid values of type are not specified in this document and may depend on the specific application. For example, a Java EJB server which exposes an Hessian interface can use the type information to instantiate the specific array type. On the other hand, a Perl server would likely ignore the contents of type entirely and create a generic array.
 map
-  
+
 #### MAP ####
 ---
 
@@ -233,7 +268,7 @@ M t x00 x13 com.caucho.test.Car
   S x00 x07 mileage
   I x00 x01 x00 x00
   z
-  
+
 A sparse array
 
 map = new HashMap();
@@ -250,9 +285,9 @@ M I x00 x00 x00 x01
   S x00 x03 foe
 
   z
-  
+
 注意：The type is chosen by the service. Often it may be the Java classname describing the service.
-  
+
 #### REF ####
 ---
 
@@ -287,7 +322,7 @@ remote ::= r t b16 b8 type-name S b16 b8 url
 EJB Session Reference
 r t x00 x0c test.TestObj
   S x00 x24 http://slytherin/ejbhome?id=69Xm8-zW
-  
+
 ### CALL ###
 ---
 
@@ -304,7 +339,7 @@ obj.add2(2,3) reply
 r x01 x00
   I x00 x00 x00 x05
   z
-  
+
 #### OBJECT NAMING(NON-NORMATIVE) ####
 ---
 
@@ -331,7 +366,7 @@ http://localhost/hessian/my-session-bean
 
 Session Bean Identifier
 http://localhost/hessian/my-session-bean?ejbid=M9Zs1Zm
-  
+
 #### METHODS AND OVERLOADING ####
 ---
 
@@ -380,12 +415,12 @@ c x01 x00
   m x00 x05 debug
   I x00 x03 x01 xcb
   z
-  
+
 #### VERSIONING ####
 ---
 
 请求和相应tag中都应该包含版本信息，其由major和minor两部分构成，当前version值为1.0。
-  
+
 ### REPLY ###
 ---
 
@@ -403,7 +438,7 @@ integer 5 result
 r x01 x00
   I x00 x00 x00 x05
   z
-  
+
 #### FAULTS ####
 ---
 
@@ -425,7 +460,7 @@ r x01 x00
   M t x00 x1d java.io.FileNotFoundException
     z
   z
-  
+
 Hessian预定义好的exception：
 
 ProtocolException	The Hessian request has some sort of syntactic error.
@@ -566,11 +601,11 @@ Hessian 1.0 compatibility reply ('cr): is a Hessian 2.0 call.
 Call Grammar
 
 call ::= C string int value*
- Figure 2 
+ Figure 2
 A Hessian call invokes a method on an object with an argument list. The object is specified by the container, e.g. for a HTTP request, it's the HTTP URL. The arguments are specified by Hessian serialization.
 
 
- TOC 
+ TOC
 4.1.1.  Methods and Overloading
 
 Method names must be unique. Two styles of overloading are supported: overloading by number of argumetns and overloading by argument types. Overloading is permitted by encoding the argument types in the method names. The types of the actual arguments must not be used to select the methods.
@@ -580,7 +615,7 @@ Method names beginning with _hessian_ are reserved.
 Servers should accept calls with either the mangled method name or the unmangled method name. Clients should send the mangled method name.
 
 
- TOC 
+ TOC
 4.1.1.1.  Overloading examples
 
 
@@ -590,9 +625,9 @@ add(double a, double b)  ->  add_double_double
 
 add(shopping.Cart cart, shopping.Item item)  ->
   add_shopping.Cart_shopping.Item
- Figure 3 
+ Figure 3
 
- TOC 
+ TOC
 4.1.2.  Arguments
 
 Arguments immediately follow the method in positional order. Argument values use Hessian's serialization.
@@ -600,7 +635,7 @@ Arguments immediately follow the method in positional order. Argument values use
 All arguments share references, i.e. the reference list starts with the first argument and continues for all other arguments. This lets two arguments share values.
 
 
- TOC 
+ TOC
 4.1.2.1.  Arguments example
 
 
@@ -618,11 +653,11 @@ C
     x9d
     Z
   Q x00         # second argument (ref to first)
- Figure 4 
+ Figure 4
 The number and type of arguments are fixed by the remote method. Variable length arguments are forbidden. Implementations may take advantage of the expected type to improve performance.
 
 
- TOC 
+ TOC
 4.1.3.  Call examples
 
 
@@ -634,16 +669,16 @@ C                 # RPC call
   x92             # two arguments
   x92             # 2 - argument 1
   x93             # 3 - argument 2
- Figure 5 
+ Figure 5
 
 obj.add2(2,3) reply
 
 H x02 x00        # Hessian 2.0
 R                # reply
   x95            # int 5
- Figure 6 
+ Figure 6
 
- TOC 
+ TOC
 4.2.  Envelope
 
 
@@ -652,13 +687,13 @@ Envelope Grammar
 envelope ::= E string env-chunk* Z
 
 env-chunk ::= int (string value)* packet int (string value)*
- Figure 7 
+ Figure 7
 A Hessian envelope wraps a Hessian message, adding headers and footers and possibly compressing or encrypting the wrapped message. The envelope type is identified by a method string, e.g. "com.caucho.hessian.io.Deflation" or "com.caucho.hessian.security.X509Encryption".
 
 Some envelopes may chunk the data, providing multiple header/footer chunks. For example, a signature envelope might chunk a large streaming message to reduce the amount of buffering required to validate the signatures.
 
 
- TOC 
+ TOC
 4.2.1.  Envelope examples
 
 
@@ -673,7 +708,7 @@ E                      # envelope
     x05 hello          # "hello"
   x90                  # no footers
   Z                    # end of envelope
- Figure 8 
+ Figure 8
 
 Chunked Identity Envelope
 
@@ -692,7 +727,7 @@ E
     x05 hello, world   # hello, world
   x90                  # no footers
   Z                    # end of envelope
- Figure 9 
+ Figure 9
 
 Compression Envelope
 
@@ -704,9 +739,9 @@ E
     x78 x9c x4b...     # compressed message
   x90                  # no footers
   Z                    # end of envelope
- Figure 10 
+ Figure 10
 
- TOC 
+ TOC
 4.3.  packet
 
 
@@ -716,11 +751,11 @@ packet   ::= (x4f b1 b0 <data>) packet
          ::= 'P' b1 b0 <data>
          ::= [x70-x7f] b0 <data>
          ::= [x80-xff] <data>
- Figure 11 
+ Figure 11
 A Hessian message contains a sequence of Hessian serialized objects. Messages can be used for multihop data transfer or simply for storing serialized data.
 
 
- TOC 
+ TOC
 4.4.  Reply
 
 
@@ -728,9 +763,9 @@ Reply Grammar
 
 reply       ::= R value
 fault       ::= F map
- Figure 12 
+ Figure 12
 
- TOC 
+ TOC
 4.4.1.  Value
 
 A successful reply returns a single value and possibly some header information.
@@ -741,9 +776,9 @@ Integer 5 Envelope
 H x02 x00
 R
   x95
- Figure 13 
+ Figure 13
 
- TOC 
+ TOC
 4.4.2.  Faults
 
 Failed calls return a fault.
@@ -765,7 +800,7 @@ F
   M x1d java.io.FileNotFoundException
     Z
   Z
- Figure 14 
+ Figure 14
 ProtocolException:
 The Hessian request has some sort of syntactic error.
 NoSuchObjectException:
@@ -777,19 +812,19 @@ A required header was not understood by the server.
 ServiceException:
 The called method threw an exception.
 
- TOC 
+ TOC
 4.5.  Versioning
 
 The call and response tags include a major and minor byte. The current version is 2.0.
 
 
- TOC 
+ TOC
 5.  Service Location (URLs)
 
 Hessian services are identified by URLs. Typically, these will be HTTP URLs, although protocols would be possible as well.
 
 
- TOC 
+ TOC
 5.1.  Object Naming (non-normative)
 
 URLs are flexible enough to encode object instances as well as simple static service locations. The URL uniquely identifies the Hessian object. Thus, Hessian can support object-oriented services, e.g. naming services, entity beans, or session beans, specified by the URL without requiring extra method parameters or headers.
@@ -799,7 +834,7 @@ Object naming may use the query string convention that "?id=XXX" names the objec
 For example, a stock quote service might have a factory interface like http://foo.com/stock and object instances like http://foo.com?id=PEET. The factory interface would return valid object references through the factory methods.
 
 
- TOC 
+ TOC
 5.2.  Object naming (non-normative) Example
 
 As an example, the following format is used for EJB:
@@ -808,7 +843,7 @@ As an example, the following format is used for EJB:
  http://hostname/hessian
 http://hostname/hessian
 http://hostname/hessian
- Figure 15 
+ Figure 15
 http://hostname/hessian identifies the EJB container. In Resin-EJB, this will refer to the EJB Servlet. "/hessian" is the servlet prefix (url-pattern.) HTTP is just used as an example; Hessian does not require the use of HTTP.
 
 /ejb-name, the path info of the request, identifies the EJB name, specifically the home interface. EJB containers can contain several entity and session beans, each with its own EJB home. The ejb-name corresponds to the ejb-name in the deployment descriptor.
@@ -827,9 +862,9 @@ http://localhost/hessian/my-session-bean
 
 # Example Session Bean Identifier
 http://localhost/hessian/my-session-bean?ejbid=M9Zs1Zm
- Figure 16 
+ Figure 16
 
- TOC 
+ TOC
 6.  Bytecode map
 
 Hessian is organized as a bytecode protocol. A Hessian reader is essentially a switch statement on the initial octet.
