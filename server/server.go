@@ -196,6 +196,7 @@ func (this *server) Handle(h Handler) error {
 	var (
 		i           int
 		j           int
+		flag        int
 		serviceNum  int
 		serverNum   int
 		err         error
@@ -207,13 +208,16 @@ func (this *server) Handle(h Handler) error {
 	serviceConf.Service = h.Service()
 	serviceConf.Version = h.Version()
 
+	flag = 0
 	serviceNum = len(config.ServiceConfList)
 	serverNum = len(config.ServerConfList)
 	for i = 0; i < serviceNum; i++ {
-		if config.ServiceConfList[i].Service == serviceConf.Service {
+		if config.ServiceConfList[i].Service == serviceConf.Service &&
+			config.ServiceConfList[i].Version == serviceConf.Version {
+
 			serviceConf.Protocol = config.ServiceConfList[i].Protocol
 			serviceConf.Group = config.ServiceConfList[i].Group
-			serviceConf.Version = config.ServiceConfList[i].Version
+			// serviceConf.Version = config.ServiceConfList[i].Version
 			for j = 0; j < serverNum; j++ {
 				if config.ServerConfList[j].Protocol == serviceConf.Protocol {
 					this.Lock()
@@ -228,9 +232,14 @@ func (this *server) Handle(h Handler) error {
 					if err != nil {
 						return err
 					}
+					flag = 1
 				}
 			}
 		}
+	}
+
+	if flag == 0 {
+		return fmt.Errorf("fail to register Handler{service:%s, version:%s}", serviceConf.Service, serviceConf.Version)
 	}
 
 	this.Lock()

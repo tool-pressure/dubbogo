@@ -13,7 +13,7 @@ package zookeeper
 import (
 	"fmt"
 	"net/url"
-	"os"
+	"strconv"
 	"time"
 )
 
@@ -33,6 +33,7 @@ const (
 
 type providerZookeeperRegistry struct {
 	*zookeeperRegistry
+	zkPath map[string]int // key = protocol://ip:port/interface
 }
 
 func NewProviderZookeeperRegistry(opts ...registry.Option) registry.Registry {
@@ -53,7 +54,7 @@ func NewProviderZookeeperRegistry(opts ...registry.Option) registry.Registry {
 		return nil
 	}
 	reg.client.name = ProviderRegistryZkClient
-	this = &providerZookeeperRegistry{zookeeperRegistry: reg}
+	this = &providerZookeeperRegistry{zookeeperRegistry: reg, zkPath: make(map[string]int)}
 	this.wg.Add(1)
 	go this.handleZkRestart()
 
@@ -116,13 +117,18 @@ func (this *providerZookeeperRegistry) Register(c interface{}) error {
 
 func (this *providerZookeeperRegistry) register(conf *registry.ProviderServiceConfig) error {
 	var (
-		ip         string
 		err        error
+		revision   string
 		params     url.Values
+		urlPath    string
 		rawURL     string
 		encodedURL string
 		dubboPath  string
 	)
+
+	if conf.ServiceConfig.Service == "" || conf.Methods == "" {
+		return fmt.Errorf("conf{Service:%s, Methods:%s}", conf.ServiceConfig.Service, conf.Methods)
+	}
 
 	err = this.validateZookeeperClient()
 	if err != nil {
@@ -138,32 +144,49 @@ func (this *providerZookeeperRegistry) register(conf *registry.ProviderServiceCo
 		return err
 	}
 
-	ip, _ = common.GetLocalIP(ip)
 	params = url.Values{}
-	params.Add("interface", conf.Service)
-	params.Add("application", this.Name)
-	params.Add("revision", conf.Version)
-	params.Add("group", conf.Group)
-	params.Add("category", (DubboType(PROVIDER)).Role())
+	params.Add("interface", conf.ServiceConfig.Service)
+	params.Add("application", this.ApplicationConfig.Name)
+	revision = this.ApplicationConfig.Version
+	if revision == "" {
+		revision = "0.1.0"
+	}
+	params.Add("revision", revision) // revision是pox.xml中application的version属性的值
+	if conf.ServiceConfig.Group != "" {
+		params.Add("group", conf.ServiceConfig.Group)
+	}
+	// dubbo java consumer来启动找provider url时，因为category不匹配，会找不到provider，导致consumer启动不了,所以使用consumers&providers
+	// DubboRole               = [...]string{"consumer", "", "", "provider"}
+	// params.Add("category", (DubboType(PROVIDER)).Role())
+	params.Add("category", (DubboType(PROVIDER)).String())
 	params.Add("dubbo", "dubbo-provider-golang-"+version.Version)
-	params.Add("org", this.Organization)
-	params.Add("module", this.Module)
-	params.Add("owner", this.Owner)
+	params.Add("org", this.ApplicationConfig.Organization)
+	params.Add("module", this.ApplicationConfig.Module)
+	params.Add("owner", this.ApplicationConfig.Owner)
 	params.Add("side", (DubboType(PROVIDER)).Role())
-	params.Add("pid", fmt.Sprintf("%d", os.Getpid()))
-	params.Add("ip", ip)
+	params.Add("pid", processID)
+	params.Add("ip", localIp)
 	params.Add("timeout", fmt.Sprintf("%v", this.Timeout))
 	// params.Add("timestamp", time.Now().Format("20060102150405"))
 	params.Add("timestamp", fmt.Sprintf("%d", this.birth))
-	params.Add("version", conf.Version)
+	if conf.ServiceConfig.Version != "" {
+		params.Add("version", conf.ServiceConfig.Version)
+	}
 	if conf.Methods != "" {
 		params.Add("methods", conf.Methods)
 	}
 	log.Debug("provider zk url params:%#v", params)
 	if conf.Path == "" {
-		conf.Path = ip
+		conf.Path = localIp
 	}
-	rawURL = fmt.Sprintf("%s://%s/%s?%s", conf.Protocol, conf.Path, conf.Service+conf.Version, params.Encode())
+
+	urlPath = conf.Service
+	if this.zkPath[urlPath] != 0 {
+		urlPath += strconv.Itoa(this.zkPath[urlPath])
+	}
+	this.zkPath[urlPath]++
+	rawURL = fmt.Sprintf("%s://%s/%s?%s", conf.Protocol, conf.Path, urlPath, params.Encode())
+
 	log.Debug("provider url:%s", rawURL)
 	encodedURL = url.QueryEscape(rawURL)
 	log.Debug("url.QueryEscape(consumer url:%s) = %s", rawURL, encodedURL)

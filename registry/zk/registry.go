@@ -11,6 +11,8 @@
 package zookeeper
 
 import (
+	"fmt"
+	"os"
 	"sync"
 	"time"
 )
@@ -39,12 +41,17 @@ const (
 )
 
 var (
-	DubboNodes = [...]string{"consumers", "configurators", "routers", "providers"}
-	// dubbo java consumer来启动找provider url时，因为category不匹配，会找不到provider，导致consumer启动不了,所以使用consumers&providers
-	// DubboRole               = [...]string{"consumer", "", "", "provider"}
-	DubboRole               = [...]string{"consumers", "", "", "providers"} //
+	DubboNodes              = [...]string{"consumers", "configurators", "routers", "providers"}
+	DubboRole               = [...]string{"consumer", "", "", "provider"} //
 	RegistryZkClient string = "zk registry"
+	processID               = ""
+	localIp                 = ""
 )
+
+func init() {
+	processID = fmt.Sprintf("%d", os.Getpid())
+	localIp, _ = common.GetLocalIP(localIp)
+}
 
 func (t DubboType) String() string {
 	return DubboNodes[t]

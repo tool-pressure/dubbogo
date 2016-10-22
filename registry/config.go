@@ -12,7 +12,10 @@ package registry
 
 import (
 	"fmt"
-	"strconv"
+)
+
+import (
+	"github.com/AlexStocks/goext/net"
 )
 
 type RegistryConfig struct {
@@ -40,13 +43,12 @@ type ServiceConfigIf interface {
  * consumerZookeeperRegistry.services[0].RegistryConfig
  */
 
+// func (this *consumerZookeeperRegistry) Register(conf ServiceConfig) 函数用到了Service
 type ServiceConfig struct {
 	Protocol string `required:"true",default:"dubbo"` // codec string, jsonrpc etc
-	// func (this *consumerZookeeperRegistry) Register(conf ServiceConfig) 函数用到了Service
-	// "/dubbo/com.ofpay.demo.api.UserProvider/providers" Service指代中间这一部分，目前假设它与interface相同
-	Service string `required:"true"`
-	Group   string
-	Version string
+	Service  string `required:"true"`                 // 其本质是dubbo.xml中的interface
+	Group    string
+	Version  string
 }
 
 func (this ServiceConfig) String() string {
@@ -81,23 +83,31 @@ type ProviderServiceConfig struct {
 }
 
 func (this ProviderServiceConfig) String() string {
-	return fmt.Sprintf("%s@%s-%s-%s-%s/%s", this.Service, this.Protocol, this.Group, this.Version, this.Path, this.Methods)
+	return fmt.Sprintf(
+		"%s@%s-%s-%s-%s/%s",
+		this.ServiceConfig.Service,
+		this.ServiceConfig.Protocol,
+		this.ServiceConfig.Group,
+		this.ServiceConfig.Version,
+		this.Path,
+		this.Methods,
+	)
 }
 
 func (this ProviderServiceConfig) ServiceEqual(url *ServiceURL) bool {
-	if this.Protocol != url.Protocol {
+	if this.ServiceConfig.Protocol != url.Protocol {
 		return false
 	}
 
-	if this.Service != url.Query.Get("interface") {
+	if this.ServiceConfig.Service != url.Query.Get("interface") {
 		return false
 	}
 
-	if this.Group != url.Group {
+	if this.ServiceConfig.Group != url.Group {
 		return false
 	}
 
-	if this.Version != url.Version {
+	if this.ServiceConfig.Version != url.Version {
 		return false
 	}
 
@@ -119,5 +129,5 @@ type ServerConfig struct {
 }
 
 func (this *ServerConfig) Address() string {
-	return this.IP + ":" + strconv.Itoa(this.Port)
+	return gxnet.HostAddress(this.IP, this.Port)
 }

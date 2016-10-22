@@ -13,7 +13,6 @@ package zookeeper
 import (
 	"fmt"
 	"net/url"
-	"os"
 	"time"
 )
 
@@ -119,9 +118,9 @@ func (this *consumerZookeeperRegistry) Register(c interface{}) error {
 
 func (this *consumerZookeeperRegistry) register(conf *registry.ServiceConfig) error {
 	var (
-		ip         string
 		err        error
 		params     url.Values
+		revision   string
 		rawURL     string
 		encodedURL string
 		dubboPath  string
@@ -152,24 +151,31 @@ func (this *consumerZookeeperRegistry) register(conf *registry.ServiceConfig) er
 
 	params = url.Values{}
 	params.Add("interface", conf.Service)
-	params.Add("application", this.Name)
-	params.Add("revision", conf.Version)
-	params.Add("group", conf.Group)
-	params.Add("category", (DubboType(CONSUMER)).Role())
+	params.Add("application", this.ApplicationConfig.Name)
+	revision = this.ApplicationConfig.Version
+	if revision == "" {
+		revision = "0.1.0"
+	}
+	params.Add("revision", revision)
+	if conf.Group != "" {
+		params.Add("group", conf.Group)
+	}
+	params.Add("category", (DubboType(CONSUMER)).String())
 	params.Add("dubbo", "dubbo-consumer-golang-"+version.Version)
 	params.Add("org", this.Organization)
 	params.Add("module", this.Module)
 	params.Add("owner", this.Owner)
 	params.Add("side", (DubboType(CONSUMER)).Role())
-	params.Add("pid", fmt.Sprintf("%d", os.Getpid()))
-	ip, _ = common.GetLocalIP(ip)
-	params.Add("ip", ip)
+	params.Add("pid", processID)
+	params.Add("ip", localIp)
 	params.Add("timeout", fmt.Sprintf("%v", this.Timeout))
 	// params.Add("timestamp", time.Now().Format("20060102150405"))
 	params.Add("timestamp", fmt.Sprintf("%d", this.birth))
-	params.Add("version", conf.Version)
+	if conf.Version != "" {
+		params.Add("version", conf.Version)
+	}
 	// log.Debug("consumer zk url params:%#v", params)
-	rawURL = fmt.Sprintf("%s://%s/%s?%s", conf.Protocol, ip, conf.Service+conf.Version, params.Encode())
+	rawURL = fmt.Sprintf("%s://%s/%s?%s", conf.Protocol, localIp, conf.Service+conf.Version, params.Encode())
 	log.Debug("consumer url:%s", rawURL)
 	encodedURL = url.QueryEscape(rawURL)
 	// log.Debug("url.QueryEscape(consumer url:%s) = %s", rawURL, encodedURL)

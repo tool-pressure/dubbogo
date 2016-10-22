@@ -11,6 +11,12 @@ a golang micro-service framework compatible with alibaba dubbo. just using jsonr
 ## develop list ##
 ---
 
+### 2016-10-22 ###
+---
+- 1 modify registry/zk/client.go:(consumerZookeeperRegistry)register to normalize zookeeper consumer url
+- 2 modify registry/zk/server.go:(providerZookeeperRegistry)register to normalize zookeeper provider url
+- 3 修改 server/server.go:(server)Handle 函数，增加了监察@Handle是否注册成功的逻辑
+
 ### 2016-10-19 ###
 ---
 - 1 调整dubbogo/server下几个文件的名称，并且让server和rpcServer两个struct交换名称，以消除源码名称与其包含的struct名称不一致带来的歧义;
