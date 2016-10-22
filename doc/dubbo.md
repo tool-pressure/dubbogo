@@ -7,12 +7,12 @@
 
 dubbo.xml 相关内容如下:
 
-  <bean id="demoService" class="com.ikurento.user.UserProviderImpl" />   
-  <bean id="otherService" class="com.ikurento.user.UserProviderAnotherImpl"/>   
+  <bean id="demoService" class="com.ikurento.user.UserProviderImpl" />
+  <bean id="otherService" class="com.ikurento.user.UserProviderAnotherImpl"/>
 
-  <dubbo:service interface="com.ikurento.user.UserProvider" ref="demoService"/>   
-  <dubbo:service interface="com.ikurento.user.UserProvider" ref="otherService" version="2.0"/>   
- 
+  <dubbo:service interface="com.ikurento.user.UserProvider" ref="demoService"/>
+  <dubbo:service interface="com.ikurento.user.UserProvider" ref="otherService" version="2.0"/>
+
   <dubbo:protocol id="dubbo" name="dubbo" port="20000" />
   <dubbo:protocol id="jsonrpc" name="jsonrpc" port="10000" />
 
@@ -30,8 +30,8 @@ dubbo.xml 相关内容如下:
 
    dubbo://192.168.35.1:20000/com.ikurento.user.UserProvider3?anyhost=true&application=user-info-server&default.timeout=10000&dubbo=2.4.10&environment=product&group=as&interface=com.ikurento.user.UserProvider&methods=getUser,isLimit,queryAll,queryUser,GetUser&owner=AlexStocks&pid=8604&revision=0.1.0&side=provider&timestamp=1476890290272&version=2.0
 
-  从以上生成结果来看:   
-  - 1 url path = protocol://host:port/interface + index   
+  从以上生成结果来看:
+  - 1 url path = protocol://host:port/interface + index
   - 2 protocol + interface + group + version唯一的对应一个service(goang的struct)
 
 ## hessian & dubbo ##
@@ -888,3 +888,9 @@ x5a          # terminator ('Z')
 x5b - x5f    # reserved
 x70 - x7f    # final packet (0 - 4096)
 x80 - xff    # final packet for envelope (0 - 127)
+
+## micro services ##
+http://duanple.blog.163.com/blog/static/70971767201329113141336/
+http://tonybai.com/2015/06/17/appdash-distributed-systems-tracing-in-go/
+http://www.zenlife.tk/distributed-tracing.md
+
