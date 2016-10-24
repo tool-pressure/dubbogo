@@ -213,7 +213,7 @@ X x00 x10 <top>hello</top>
 #### BINARY ####
 ---
 
-Binary是二进制值。其以chunk形式组织起来，'B'代表第一个chunk，'b'代表最后一个chunk，chunk开始处有16-bit长度值。
+Binary是二进制值。其以chunk形式组织起来，'b'代表第一个chunk，'B'代表最后一个chunk，chunk开始处有16-bit长度值。
 
 binary ::= (b b16 b8 binary-data)* B b16 b8 binary-data
 
@@ -890,7 +890,7 @@ x70 - x7f    # final packet (0 - 4096)
 x80 - xff    # final packet for envelope (0 - 127)
 
 ## micro services ##
-http://duanple.blog.163.com/blog/static/70971767201329113141336/
-http://tonybai.com/2015/06/17/appdash-distributed-systems-tracing-in-go/
-http://www.zenlife.tk/distributed-tracing.md
+- 1 http://duanple.blog.163.com/blog/static/70971767201329113141336/
+- 2 http://tonybai.com/2015/06/17/appdash-distributed-systems-tracing-in-go/
+- 3 http://www.zenlife.tk/distributed-tracing.md
 
