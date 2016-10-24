@@ -31,7 +31,7 @@ type clientCodec struct {
 	resp clientResponse
 
 	sync.Mutex
-	pending map[uint64]string
+	pending map[int64]string
 }
 
 // type clientRequest struct {
@@ -44,7 +44,7 @@ type clientRequest struct {
 	Version string      `json:"jsonrpc"`
 	Method  string      `json:"method"`
 	Params  interface{} `json:"params"`
-	ID      uint64      `json:"id"`
+	ID      int64       `json:"id"`
 }
 
 // type clientResponse struct {
@@ -55,7 +55,7 @@ type clientRequest struct {
 
 type clientResponse struct {
 	Version string           `json:"jsonrpc"`
-	ID      uint64           `json:"id"`
+	ID      int64            `json:"id"`
 	Result  *json.RawMessage `json:"result,omitempty"`
 	// Error   *json.RawMessage `json:"error"`
 	Error *Error `json:"error,omitempty"`
@@ -73,7 +73,7 @@ func newClientCodec(conn io.ReadWriteCloser) *clientCodec {
 		dec:     json.NewDecoder(conn),
 		enc:     json.NewEncoder(conn),
 		c:       conn,
-		pending: make(map[uint64]string),
+		pending: make(map[int64]string),
 	}
 }
 

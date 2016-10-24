@@ -30,8 +30,8 @@ type serverCodec struct {
 	// When rpc responds, we use the sequence number in
 	// the response to find the original request ID.
 	mutex   sync.Mutex
-	seq     uint64
-	pending map[uint64]*json.RawMessage
+	seq     int64
+	pending map[int64]*json.RawMessage
 }
 
 // serverRequest represents a JSON-RPC request received by the server.
@@ -84,7 +84,7 @@ func newServerCodec(conn io.ReadWriteCloser, srv interface{}) *serverCodec {
 		enc:     json.NewEncoder(conn),
 		c:       conn,
 		srv:     srv,
-		pending: make(map[uint64]*json.RawMessage),
+		pending: make(map[int64]*json.RawMessage),
 	}
 }
 
