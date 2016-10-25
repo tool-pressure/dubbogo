@@ -58,47 +58,76 @@ dubbo, hessian2, java, json
 1字节状态。当消息类型为响应时，设置响应状态。24-31位。
 8字节，消息ID,long类型，32-95位。
 4字节，消息长度，96-127位
-源代码参考
-com.alibaba.dubbo.remoting.exchange.codec.ExchangeCodec
+源代码参考:
 
-protected void encodeRequest(Channel channel, ChannelBuffer buffer, Request req) throws IOException {
-        Serialization serialization = getSerialization(channel);
-        // header.
-        byte[] header = new byte[HEADER_LENGTH];
-        // set magic number.
-        Bytes.short2bytes(MAGIC, header);
+	// package: com.alibaba.dubbo.remoting.exchange.codec.ExchangeCodec
 
-        // set request and serialization flag.
-        header[2] = (byte) (FLAG_REQUEST | serialization.getContentTypeId());
+	protected void encodeRequest(Channel channel, ChannelBuffer buffer, Request req) throws IOException {
+		Serialization serialization = getSerialization(channel);
+		// header.
+		byte[] header = new byte[HEADER_LENGTH];
+		// set magic number.
+		Bytes.short2bytes(MAGIC, header);
 
-        if (req.isTwoWay()) header[2] |= FLAG_TWOWAY;
-        if (req.isEvent()) header[2] |= FLAG_EVENT;
+		// set request and serialization flag.
+		header[2] = (byte) (FLAG_REQUEST | serialization.getContentTypeId());
 
-        // set request id.
-        Bytes.long2bytes(req.getId(), header, 4);
+		if (req.isTwoWay()) header[2] |= FLAG_TWOWAY;
+		if (req.isEvent()) header[2] |= FLAG_EVENT;
 
-        // encode request data.
-        int savedWriteIndex = buffer.writerIndex();
-        buffer.writerIndex(savedWriteIndex + HEADER_LENGTH);
-        ChannelBufferOutputStream bos = new ChannelBufferOutputStream(buffer);
-        ObjectOutput out = serialization.serialize(channel.getUrl(), bos);
-        if (req.isEvent()) {
-            encodeEventData(channel, out, req.getData());
-        } else {
-            encodeRequestData(channel, out, req.getData());
-        }
-        out.flushBuffer();
-        bos.flush();
-        bos.close();
-        int len = bos.writtenBytes();
-        checkPayload(channel, len);
-        Bytes.int2bytes(len, header, 12);
+		// set request id.
+		Bytes.long2bytes(req.getId(), header, 4);
 
-        // write
-        buffer.writerIndex(savedWriteIndex);
-        buffer.writeBytes(header); // write header.
-        buffer.writerIndex(savedWriteIndex + HEADER_LENGTH + len);
-    }
+		// encode request data.
+		int savedWriteIndex = buffer.writerIndex();
+		buffer.writerIndex(savedWriteIndex + HEADER_LENGTH);
+		ChannelBufferOutputStream bos = new ChannelBufferOutputStream(buffer);
+		ObjectOutput out = serialization.serialize(channel.getUrl(), bos);
+		if (req.isEvent()) {
+			encodeEventData(channel, out, req.getData());
+		} else {
+			encodeRequestData(channel, out, req.getData());
+		}
+		out.flushBuffer();
+		bos.flush();
+		bos.close();
+		int len = bos.writtenBytes();
+		checkPayload(channel, len);
+		Bytes.int2bytes(len, header, 12);
+
+		// write
+		buffer.writerIndex(savedWriteIndex);
+		buffer.writeBytes(header); // write header.
+		buffer.writerIndex(savedWriteIndex + HEADER_LENGTH + len);
+	}
+
+	CollectionSerializer.java:
+	public void writeObject(Object obj, AbstractHessianOutput out) throws IOException {
+	  if (out.addRef(obj))
+		return;
+
+	  Collection list = (Collection) obj;
+
+	  Class cl = obj.getClass();
+	  boolean hasEnd;
+
+	  if (obj instanceof Set
+			  || !_sendJavaType
+			  || !Serializable.class.isAssignableFrom(cl))
+		hasEnd = out.writeListBegin(list.size(), null);
+	  else
+		hasEnd = out.writeListBegin(list.size(), obj.getClass().getName());
+
+	  Iterator iter = list.iterator();
+	  while (iter.hasNext()) {
+		Object value = iter.next();
+
+		out.writeObject(value);
+	  }
+
+	  if (hasEnd)
+		out.writeListEnd();
+	}
 
 ### dubbo conf###
 ---
