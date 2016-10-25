@@ -44,7 +44,61 @@ dubbo.xml 相关内容如下:
 Serialization
 dubbo, hessian2, java, json
 
-从这句话猜测它用的是hessian1.2。另外，dubbo可能对hessian协议做了扩展，具体细节可以参考"http://dubbo.io/Developer+Guide-zh.htm"一文中的“协议头约定”一图。
+[在Dubbo中使用高效的Java序列化（Kryo和FST）](http://dangdangdotcom.github.io/dubbox/serialization.html)一文中有这么一句话"hessian是一种跨语言的高效二进制序列化方式。但这里实际不是原生的hessian2序列化，而是阿里修改过的hessian lite，它是dubbo RPC默认启用的序列化方式"。
+
+从这句话猜测它用的是hessian2。另外，dubbo可能对hessian协议做了扩展，具体细节可以参考"http://dubbo.io/Developer+Guide-zh.htm"一文中的“协议头约定”一图。
+
+解释
+协议格式 header body data
+
+协议头是16字节的定长数据，参见上图dubbo,16*8=128,地址范围0~127
+
+2字节magic字符串0xdabb,0-7高位，8-15低位
+1字节的消息标志位。16-20序列id,21 event,22 two way,23请求或响应标识
+1字节状态。当消息类型为响应时，设置响应状态。24-31位。
+8字节，消息ID,long类型，32-95位。
+4字节，消息长度，96-127位
+源代码参考
+com.alibaba.dubbo.remoting.exchange.codec.ExchangeCodec
+
+protected void encodeRequest(Channel channel, ChannelBuffer buffer, Request req) throws IOException {
+        Serialization serialization = getSerialization(channel);
+        // header.
+        byte[] header = new byte[HEADER_LENGTH];
+        // set magic number.
+        Bytes.short2bytes(MAGIC, header);
+
+        // set request and serialization flag.
+        header[2] = (byte) (FLAG_REQUEST | serialization.getContentTypeId());
+
+        if (req.isTwoWay()) header[2] |= FLAG_TWOWAY;
+        if (req.isEvent()) header[2] |= FLAG_EVENT;
+
+        // set request id.
+        Bytes.long2bytes(req.getId(), header, 4);
+
+        // encode request data.
+        int savedWriteIndex = buffer.writerIndex();
+        buffer.writerIndex(savedWriteIndex + HEADER_LENGTH);
+        ChannelBufferOutputStream bos = new ChannelBufferOutputStream(buffer);
+        ObjectOutput out = serialization.serialize(channel.getUrl(), bos);
+        if (req.isEvent()) {
+            encodeEventData(channel, out, req.getData());
+        } else {
+            encodeRequestData(channel, out, req.getData());
+        }
+        out.flushBuffer();
+        bos.flush();
+        bos.close();
+        int len = bos.writtenBytes();
+        checkPayload(channel, len);
+        Bytes.int2bytes(len, header, 12);
+
+        // write
+        buffer.writerIndex(savedWriteIndex);
+        buffer.writeBytes(header); // write header.
+        buffer.writerIndex(savedWriteIndex + HEADER_LENGTH + len);
+    }
 
 ### dubbo conf###
 ---
@@ -65,6 +119,10 @@ Dubbo协议缺省每服务每提供者每消费者使用单一长连接，如果
     - 序列化：Hessian二进制序列化
     - 适用范围：传入传出参数数据包较小（建议小于100K），消费者比提供者个数多，单一消费者无法压满提供者，尽量不要用dubbo协议传输大文件或超大字符串。
     - 适用场景：常规远程服务方法调用
+
+另外，dubbo的配置中可以配置check参数，如下示例:
+<dubbo:reference id="userService" interface="com.service.UserService" check="false" async="false" protocol="thrift"></dubbo:reference>
+check的意思是client调用服务时检查provider是否启动成功。一般设置为false，因为client先于provider启动了，如果check设置为true则client此时会抛出一个异常.
 
 ### dubbo QA ###
 ---
