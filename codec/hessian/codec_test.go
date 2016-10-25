@@ -13,6 +13,7 @@ import (
 )
 
 // go test -v codec_test.go codec.go
+// go test -v -run TestPackUint16
 
 func TestPackUint16(t *testing.T) {
 	// var arr []byte
