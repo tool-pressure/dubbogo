@@ -46,7 +46,7 @@ dubbo, hessian2, java, json
 
 [在Dubbo中使用高效的Java序列化（Kryo和FST）](http://dangdangdotcom.github.io/dubbox/serialization.html)一文中有这么一句话"hessian是一种跨语言的高效二进制序列化方式。但这里实际不是原生的hessian2序列化，而是阿里修改过的hessian lite，它是dubbo RPC默认启用的序列化方式"。
 
-从这句话猜测它用的是hessian2。另外，dubbo可能对hessian协议做了扩展，具体细节可以参考"http://dubbo.io/Developer+Guide-zh.htm"一文中的“协议头约定”一图。
+从这句话猜测它用的是hessian2。另外，dubbo可能对hessian协议做了扩展，具体细节可以参考[开发者指南](http://dubbo.io/Developer+Guide-zh.htm)一文中的"协议头约定"一图。
 
 解释
 协议格式 header body data
@@ -310,24 +310,32 @@ binary ::= (b b16 b8 binary-data)* B b16 b8 binary-data
 List是类似于array的有序列表。List由类型字符串(type string),长度值以及list中的对象列表和一个结束字符'z'。类型字符串(type string)可以是由服务定义的任意UTF-8字符串(通常是一个Java class name，但也可以做其他解释)。长度值可以是-1，表示list长度可变。
 
 list ::= V type? length? object* z
+
 Each list item is added to the reference list to handle shared and circular elements. See the ref element.
 
 任何list都可以是空Any parser expecting a list must also accept a null or a shared ref.
 
 Java数组 int[] = {0, 1}序列化后结果：
+
 V t x00 x04 [int
+
   l x00 x00 x00 x02
+
   I x00 x00 x00 x00
+
   I x00 x00 x00 x01
+
   z
 
 不指定长度不指定类型list = {0, "foobar"}序列化后结果：
+
 V I x00 x00 x00 x00
+
   S x00 x06 foobar
+
   z
 
 注意：The valid values of type are not specified in this document and may depend on the specific application. For example, a Java EJB server which exposes an Hessian interface can use the type information to instantiate the specific array type. On the other hand, a Perl server would likely ignore the contents of type entirely and create a generic array.
-map
 
 #### MAP ####
 ---
@@ -340,20 +348,27 @@ type可以为空，例如长度为零。当type为空的时候，parser自己选
 每个map都会被添加进引用链表，parser要支持null map或者null ref。
 
 一个Java对象序列化为一个Map：
-public class Car implements Serializable {
-  String model = "Beetle";
-  String color = "aquamarine";
-  int mileage = 65536;
-}
+
+	public class Car implements Serializable {
+	  String model = "Beetle";
+	  String color = "aquamarine";
+	  int mileage = 65536;
+	}
+
 M t x00 x13 com.caucho.test.Car
+
   S x00 x05 model
+
   S x00 x06 Beetle
 
   S x00 x05 color
+
   S x00 x0a aquamarine
 
   S x00 x07 mileage
+
   I x00 x01 x00 x00
+
   z
 
 A sparse array
@@ -362,13 +377,17 @@ map = new HashMap();
 map.put(new Integer(1), "fee");
 map.put(new Integer(16), "fie");
 map.put(new Integer(256), "foe");
+
 M I x00 x00 x00 x01
+
   S x00 x03 fee
 
   I x00 x00 x00 x10
+
   S x00 x03 fie
 
   I x00 x00 x01 x00
+
   S x00 x03 foe
 
   z
@@ -387,14 +406,21 @@ ref可以使用一个还未读取完整的对象。例如一个环形链表虽�
 parser解析list or map的时候可以把他们存入array，引用解析时数字就是index。为了支持环形结构，可以每解析完一个element就立即放入array。
 
 circular list
-list = new LinkedList();
-list.head = 1;
-list.tail = list;
+
+	list = new LinkedList();
+	list.head = 1;
+	list.tail = list;
+
 M t x00 x0a LinkedList
+
   S x00 x04 head
+
   I x00 x00 x00 x01
+
   S x00 x04 tail
+
   R x00 x00 x00 x00
+
   z
 
 注意：
@@ -416,15 +442,25 @@ r t x00 x0c test.TestObj
 Hessian协议的调用由method以及一个参数链表描述的对象构成。对象由容器具体定义，例如一个HTTP请求，它代表一个HTTP URL，参数也采用Hessian协议序列化之。
 
 call ::= c x01 x00 header* m b16 b8 method-string (object)* z
+
 obj.add2(2,3) call
+
 c x01 x00
+
   m x00 x04 add2
+
   I x00 x00 x00 x02
+
   I x00 x00 x00 x03
+
   z
+
 obj.add2(2,3) reply
+
 r x01 x00
+
   I x00 x00 x00 x05
+
   z
 
 #### OBJECT NAMING(NON-NORMATIVE) ####
