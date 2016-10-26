@@ -98,13 +98,13 @@ func (r *rpcRequest) Stream() bool {
 type request struct {
 	Service string
 	Method  string
-	Seq     uint64 // sequence number chosen by client
+	Seq     int64 // sequence number chosen by client
 }
 
 type response struct {
 	Service string
 	Method  string
-	Seq     uint64 // echoes that of the request
+	Seq     int64  // echoes that of the request
 	Error   string // error, if any.
 }
 

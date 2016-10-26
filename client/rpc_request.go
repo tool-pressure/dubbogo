@@ -1,5 +1,5 @@
 /******************************************************
-# DESC    :
+# DESC    : rpc client request
 # AUTHOR  : Alex Stocks
 # VERSION : 1.0
 # LICENCE : Apache Licence 2.0

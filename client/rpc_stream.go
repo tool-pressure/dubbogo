@@ -25,7 +25,7 @@ import (
 // Implements the streamer interface
 type rpcStream struct {
 	sync.RWMutex
-	seq     uint64
+	seq     int64
 	closed  chan bool
 	err     error
 	request Request

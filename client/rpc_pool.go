@@ -1,5 +1,5 @@
 /******************************************************
-# DESC    :
+# DESC    : rpc connection pool
 # AUTHOR  : Alex Stocks
 # VERSION : 1.0
 # LICENCE : Apache Licence 2.0
@@ -22,7 +22,7 @@ import (
 
 type pool struct {
 	size int   // 从line 92可见，size是[]*poolConn数组的size
-	ttl  int64 // 从line 61 可见，ttl是每个poolConn的有效期时间. pool对象会在getConn时执行ttkl检查
+	ttl  int64 // 从line 61 可见，ttl是每个poolConn的有效期时间. pool对象会在getConn时执行ttl检查
 
 	sync.Mutex
 	conns map[string][]*poolConn // 从[]*poolConn 可见key是连接地址，而value是对应这个地址的连接数组

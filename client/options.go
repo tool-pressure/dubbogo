@@ -23,6 +23,69 @@ import (
 	"github.com/AlexStocks/dubbogo/transport"
 )
 
+//////////////////////////////////////////////
+// Request Options
+//////////////////////////////////////////////
+
+func StreamingRequest() RequestOption {
+	return func(o *RequestOptions) {
+		o.Stream = true
+	}
+}
+
+type RequestOptions struct {
+	Stream bool
+
+	// Other options for implementations of the interface
+	// can be stored in a context
+	Context context.Context
+}
+
+//////////////////////////////////////////////
+// Call Options
+//////////////////////////////////////////////
+
+type CallOptions struct {
+	// Transport Dial Timeout
+	DialTimeout time.Duration
+	// Number of Call attempts
+	Retries int
+	// Request/Response timeout
+	RequestTimeout time.Duration
+
+	// Other options for implementations of the interface
+	// can be stored in a context
+	Context context.Context
+}
+
+// WithDialTimeout is a CallOption which overrides that which
+// set in Options.CallOptions
+func WithDialTimeout(d time.Duration) CallOption {
+	return func(o *CallOptions) {
+		o.DialTimeout = d
+	}
+}
+
+// WithRetries is a CallOption which overrides that which
+// set in Options.CallOptions
+func WithRetries(i int) CallOption {
+	return func(o *CallOptions) {
+		o.Retries = i
+	}
+}
+
+// WithRequestTimeout is a CallOption which overrides that which
+// set in Options.CallOptions
+func WithRequestTimeout(d time.Duration) CallOption {
+	return func(o *CallOptions) {
+		o.RequestTimeout = d
+	}
+}
+
+//////////////////////////////////////////////
+// Options
+//////////////////////////////////////////////
+
 type Options struct {
 	// Used to select codec
 	ContentType string
@@ -39,27 +102,6 @@ type Options struct {
 
 	// Default Call Options
 	CallOptions CallOptions
-
-	// Other options for implementations of the interface
-	// can be stored in a context
-	Context context.Context
-}
-
-type CallOptions struct {
-	// Transport Dial Timeout
-	DialTimeout time.Duration
-	// Number of Call attempts
-	Retries int
-	// Request/Response timeout
-	RequestTimeout time.Duration
-
-	// Other options for implementations of the interface
-	// can be stored in a context
-	Context context.Context
-}
-
-type RequestOptions struct {
-	Stream bool
 
 	// Other options for implementations of the interface
 	// can be stored in a context
@@ -166,39 +208,5 @@ func RequestTimeout(d time.Duration) Option {
 func DialTimeout(d time.Duration) Option {
 	return func(o *Options) {
 		o.CallOptions.DialTimeout = d
-	}
-}
-
-// Call Options
-
-// WithRetries is a CallOption which overrides that which
-// set in Options.CallOptions
-func WithRetries(i int) CallOption {
-	return func(o *CallOptions) {
-		o.Retries = i
-	}
-}
-
-// WithRequestTimeout is a CallOption which overrides that which
-// set in Options.CallOptions
-func WithRequestTimeout(d time.Duration) CallOption {
-	return func(o *CallOptions) {
-		o.RequestTimeout = d
-	}
-}
-
-// WithDialTimeout is a CallOption which overrides that which
-// set in Options.CallOptions
-func WithDialTimeout(d time.Duration) CallOption {
-	return func(o *CallOptions) {
-		o.DialTimeout = d
-	}
-}
-
-// Request Options
-
-func StreamingRequest() RequestOption {
-	return func(o *RequestOptions) {
-		o.Stream = true
 	}
 }

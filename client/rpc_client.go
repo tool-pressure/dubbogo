@@ -12,12 +12,12 @@ package client
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strconv"
 	"sync"
 	"sync/atomic"
 	"time"
-	// "golang.org/x/net/context"
 )
 
 import (
@@ -35,15 +35,21 @@ const (
 	CLEAN_CHANNEL_SIZE = 64
 )
 
+//////////////////////////////////////////////
+// RPC Client
+//////////////////////////////////////////////
+
+type empty struct{}
+
 // thread safe
 type rpcClient struct {
-	ID   uint64
+	ID   int64
 	once sync.Once
 	opts Options
 	pool *pool
 
 	// gc goroutine
-	done chan struct{}
+	done chan empty
 	wg   sync.WaitGroup
 	gcCh chan interface{}
 }
@@ -53,11 +59,11 @@ func newRPCClient(opt ...Option) Client {
 
 	t := time.Now()
 	rc := &rpcClient{
-		ID:   uint64(t.Second() * t.Nanosecond() * common.Goid()),
-		once: sync.Once{},
+		ID: int64(uint32(t.Second() * t.Nanosecond() * common.Goid())),
+		// once: sync.Once{},
 		opts: opts,
 		pool: newPool(opts.PoolSize, opts.PoolTTL),
-		done: make(chan struct{}),
+		done: make(chan empty),
 		gcCh: make(chan interface{}, CLEAN_CHANNEL_SIZE),
 	}
 	log.Info("client initial ID:%d", rc.ID)
@@ -112,7 +118,8 @@ func (this *rpcClient) newCodec(contentType string) (codec.NewCodec, error) {
 // 6 启动一个收发goroutine, 调用stream完成网络收发;
 // 7 通过一个error channel等待收发goroutine结束流程。
 // rpc client -> rpc stream -> rpc codec -> codec + transport
-func (this *rpcClient) call(reqID uint64, ctx context.Context, address string, path string, req Request, rsp interface{}, opts CallOptions) error {
+func (this *rpcClient) call(reqID int64, ctx context.Context, address string, path string, req Request, rsp interface{}, opts CallOptions) error {
+	// 创建msg
 	msg := &transport.Message{
 		Header: make(map[string]string),
 	}
@@ -219,6 +226,157 @@ func (this *rpcClient) call(reqID uint64, ctx context.Context, address string, p
 	}
 }
 
+func (r *rpcClient) stream(ctx context.Context, address string, req Request, opts CallOptions) (Streamer, error) {
+	msg := &transport.Message{
+		Header: make(map[string]string),
+	}
+
+	md, ok := metadata.FromContext(ctx)
+	if ok {
+		for k, v := range md {
+			msg.Header[k] = v
+		}
+	}
+
+	// set timeout in nanoseconds
+	msg.Header["Timeout"] = fmt.Sprintf("%d", opts.RequestTimeout)
+	// set the content type for the request
+	msg.Header["Content-Type"] = req.ContentType()
+	// set the accept header
+	msg.Header["Accept"] = req.ContentType()
+
+	cf, err := r.newCodec(req.ContentType())
+	if err != nil {
+		return nil, errors.InternalServerError("go.micro.client", err.Error())
+	}
+
+	c, err := r.opts.Transport.Dial(address, transport.WithStream(), transport.WithTimeout(opts.DialTimeout))
+	if err != nil {
+		return nil, errors.InternalServerError("go.micro.client", fmt.Sprintf("Error sending request: %v", err))
+	}
+
+	stream := &rpcStream{
+		context: ctx,
+		request: req,
+		closed:  make(chan bool),
+		codec:   newRpcPlusCodec(msg, c, cf),
+	}
+
+	ch := make(chan error, 1)
+
+	go func() {
+		ch <- stream.Send(req.Request())
+	}()
+
+	var grr error
+
+	select {
+	case err := <-ch:
+		grr = err
+	case <-ctx.Done():
+		grr = errors.New("go.micro.client", fmt.Sprintf("%v", ctx.Err()), 408)
+	}
+
+	if grr != nil {
+		stream.Close()
+		return nil, grr
+	}
+
+	return stream, nil
+}
+
+func (r *rpcClient) Stream(ctx context.Context, request Request, opts ...CallOption) (Streamer, error) {
+	// make a copy of call opts
+	callOpts := r.opts.CallOptions
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
+	// get next nodes from the selector
+	next, err := r.opts.Selector.Select(request.Service(), callOpts.SelectOptions...)
+	if err != nil && err == selector.ErrNotFound {
+		return nil, errors.NotFound("go.micro.client", err.Error())
+	} else if err != nil {
+		return nil, errors.InternalServerError("go.micro.client", err.Error())
+	}
+
+	// check if we already have a deadline
+	d, ok := ctx.Deadline()
+	if !ok {
+		// no deadline so we create a new one
+		ctx, _ = context.WithTimeout(ctx, callOpts.RequestTimeout)
+	} else {
+		// got a deadline so no need to setup context
+		// but we need to set the timeout we pass along
+		opt := WithRequestTimeout(d.Sub(time.Now()))
+		opt(&callOpts)
+	}
+
+	// should we noop right here?
+	select {
+	case <-ctx.Done():
+		return nil, errors.New("go.micro.client", fmt.Sprintf("%v", ctx.Err()), 408)
+	default:
+	}
+
+	call := func(i int) (Streamer, error) {
+		// call backoff first. Someone may want an initial start delay
+		t, err := callOpts.Backoff(ctx, request, i)
+		if err != nil {
+			return nil, errors.InternalServerError("go.micro.client", err.Error())
+		}
+
+		// only sleep if greater than 0
+		if t.Seconds() > 0 {
+			time.Sleep(t)
+		}
+
+		node, err := next()
+		if err != nil && err == selector.ErrNotFound {
+			return nil, errors.NotFound("go.micro.client", err.Error())
+		} else if err != nil {
+			return nil, errors.InternalServerError("go.micro.client", err.Error())
+		}
+
+		address := node.Address
+		if node.Port > 0 {
+			address = fmt.Sprintf("%s:%d", address, node.Port)
+		}
+
+		stream, err := r.stream(ctx, address, request, callOpts)
+		r.opts.Selector.Mark(request.Service(), node, err)
+		return stream, err
+	}
+
+	type response struct {
+		stream Streamer
+		err    error
+	}
+
+	ch := make(chan response, callOpts.Retries)
+	var grr error
+
+	for i := 0; i < callOpts.Retries; i++ {
+		go func() {
+			s, err := call(i)
+			ch <- response{s, err}
+		}()
+
+		select {
+		case <-ctx.Done():
+			return nil, errors.New("go.micro.client", fmt.Sprintf("%v", ctx.Err()), 408)
+		case rsp := <-ch:
+			// if the call succeeded lets bail early
+			if rsp.err == nil {
+				return rsp.stream, nil
+			}
+			grr = rsp.err
+		}
+	}
+
+	return nil, grr
+}
+
 func (this *rpcClient) Init(opts ...Option) error {
 	size := this.opts.PoolSize
 	ttl := this.opts.PoolTTL
@@ -246,7 +404,7 @@ func (this *rpcClient) Options() Options {
 //   2.2 调用rpcClient.call()
 // 3 根据重试次数的设定，循环调用call，直到有一次成功或者重试
 func (this *rpcClient) Call(ctx context.Context, request Request, response interface{}, opts ...CallOption) error {
-	reqID := atomic.AddUint64(&this.ID, 1)
+	reqID := atomic.AddInt64(&this.ID, 1)
 	// make a copy of call opts
 	callOpts := this.opts.CallOptions
 	for _, opt := range opts {

@@ -64,13 +64,13 @@ type clientCodec interface {
 type request struct {
 	Service       string
 	ServiceMethod string // format: "Service.Method"
-	Seq           uint64 // sequence number chosen by client
+	Seq           int64  // sequence number chosen by client
 	// next          *request // for free list in Server
 }
 
 type response struct {
 	ServiceMethod string // echoes that of the Request
-	Seq           uint64 // echoes that of the request
+	Seq           int64  // echoes that of the request
 	Error         string // error, if any.
 	// next          *response // for free list in Server
 }

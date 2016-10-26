@@ -11,6 +11,14 @@ a golang micro-service framework compatible with alibaba dubbo. just using jsonr
 ## develop list ##
 ---
 
+### 2016-10-26 ###
+---
+- 1 添加 github.com/AlexStocks/dubbogo-examples/calculator/java-server 作为client_test.go的mock服务端
+
+### 2016-10-23 ###
+---
+- 1 把所有有关ID的field的type由uint64改为int64，因为java没有uint64类型 
+
 ### 2016-10-22 ###
 ---
 - 1 modify registry/zk/client.go:(consumerZookeeperRegistry)register to normalize zookeeper consumer url

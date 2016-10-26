@@ -28,7 +28,7 @@ type Selector interface {
 
 // Next is a function that returns the next node
 // based on the selector's strategy
-type Next func(ID uint64) (*registry.ServiceURL, error)
+type Next func(ID int64) (*registry.ServiceURL, error)
 
 var (
 	ErrNotFound              = errors.New("not found")

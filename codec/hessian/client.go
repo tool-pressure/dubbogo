@@ -36,7 +36,6 @@ func Request(url string, method string, params ...Any) (interface{}, error) {
 	if err != nil {
 		return nil, err
 	}
-	fmt.Println(resp)
 
 	this := NewHessian(resp)
 	v, err := this.Parse()

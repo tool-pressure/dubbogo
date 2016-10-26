@@ -28,28 +28,28 @@ type SelectorModeFunc func([]*registry.ServiceURL) Next
 
 // Random is a random strategy algorithm for node selection
 func random(services []*registry.ServiceURL) Next {
-	return func(ID uint64) (*registry.ServiceURL, error) {
+	return func(ID int64) (*registry.ServiceURL, error) {
 		if len(services) == 0 {
 			return nil, ErrNoneAvailable
 		}
 
-		i := ((uint64)(rand.Int()) + ID) % (uint64)(len(services))
+		i := ((int64)(rand.Int()) + ID) % (int64)(len(services))
 		return services[i], nil
 	}
 }
 
 // RoundRobin is a roundrobin strategy algorithm for node selection
 func roundRobin(services []*registry.ServiceURL) Next {
-	var i uint64
+	var i int64
 	var mtx sync.Mutex
 
-	return func(ID uint64) (*registry.ServiceURL, error) {
+	return func(ID int64) (*registry.ServiceURL, error) {
 		if len(services) == 0 {
 			return nil, ErrNoneAvailable
 		}
 
 		mtx.Lock()
-		node := services[(ID+i)%(uint64)(len(services))]
+		node := services[(ID+i)%int64(len(services))]
 		i++
 		mtx.Unlock()
 
