@@ -232,68 +232,68 @@ Hessian有两种特殊的结构体：
 ---
 Null代表一个空指针。一个字节的'N'也可代表空指针。任何string, xml, binary, list, map, remote类型变量都可以赋值为NULL。
 
-null ::= N
+	null ::= N
 
 #### BOOLEAN ####
 ---
 一个字节的'F'代表false，一个字节的'T'代表true。
 
-boolean ::= T
-        ::= F
+	boolean ::= T
+			::= F
 
 #### INT ####
 ---
 
 INT是32-bit有符号整数。一个数字后缀是'I'，代表其是4字节大端序整数。
 
-int ::= I b32 b24 b16 b8
-integer 300
-I x00 x00 x01 x2c
+	int ::= I b32 b24 b16 b8
+	integer 300
+	I x00 x00 x01 x2c
 
 #### LONG ####
 ---
 
 long是64-bit有符号整数。一个数字后缀是'L'，代表其是8字节大端序整数。
 
-long ::= L b64 b56 b48 b40 b32 b24 b16 b8
-long 300
-L x00 x00 x00 x00 x00 x00 x01 x2c
+	long ::= L b64 b56 b48 b40 b32 b24 b16 b8
+	long 300
+	L x00 x00 x00 x00 x00 x00 x01 x2c
 
 #### DOUBLE ####
 ---
 
 长度是64-bit，且规格复合IEEE浮点数定义。
 
-double ::= D b64 b56 b48 b40 b32 b24 b16 b8
-double 12.25
-D x40 x28 x80 x00 x00 x00 x00 x00
+	double ::= D b64 b56 b48 b40 b32 b24 b16 b8
+	double 12.25
+	D x40 x28 x80 x00 x00 x00 x00 x00
 
 #### DATE ####
 ---
 
 Date是64-bit长度整数，其值为从公元纪元以来的毫秒数。
 
-date ::= d b64 b56 b48 b40 b32 b24 b16 b8
-2:51:31 May 8, 1998
-d x00 x00 x00 xd0 x4b x92 x84 xb8
+	date ::= d b64 b56 b48 b40 b32 b24 b16 b8
+	2:51:31 May 8, 1998
+	d x00 x00 x00 xd0 x4b x92 x84 xb8
 
 #### STRING ####
 ---
 
 字符串以UTF-8编码，其最前面是16-bit unicode字符(代表长度)。其以chunk形式组织起来，'s'代表第一个chunk，'S'代表最后一个chunk，chunk开始处有16-bit长度值，这个值是字符的个数，可能与总字节长度不等。
 
-string ::= (s b16 b8 utf-8-data)* S b16 b8 utf-8-data
-"Hello" string
-S x00 x05 hello
+	string ::= (s b16 b8 utf-8-data)* S b16 b8 utf-8-data
+	"Hello" string
+	S x00 x05 hello
 
 #### XML ####
 ---
 
 每个XML文档以UTF-8编码，其最前面是16-bit unicode字符(代表长度)。其以chunk形式组织起来，'x'代表第一个chunk，'X'代表最后一个chunk，chunk开始处有16-bit长度值，这个值是字符的个数，可能与总字节长度不等。
 
-xml ::= (x b16 b8 utf-8-data)* X b16 b8 utf-8-data
-trivial XML document
-X x00 x10 <top>hello</top>
+	xml ::= (x b16 b8 utf-8-data)* X b16 b8 utf-8-data
+	trivial XML document
+	X x00 x10 <top>hello</top>
 
 注意：本文没有定义language mapping, 具体实现的时候读到一个xml对象时字符串解释由用户自己定义。
 
@@ -302,14 +302,14 @@ X x00 x10 <top>hello</top>
 
 Binary是二进制值。其以chunk形式组织起来，'b'代表第一个chunk，'B'代表最后一个chunk，chunk开始处有16-bit长度值。
 
-binary ::= (b b16 b8 binary-data)* B b16 b8 binary-data
+	binary ::= (b b16 b8 binary-data)* B b16 b8 binary-data
 
 #### LIST ####
 ---
 
 List是类似于array的有序列表。List由类型字符串(type string),长度值以及list中的对象列表和一个结束字符'z'。类型字符串(type string)可以是由服务定义的任意UTF-8字符串(通常是一个Java class name，但也可以做其他解释)。长度值可以是-1，表示list长度可变。
 
-list ::= V type? length? object* z
+	list ::= V type? length? object* z
 
 Each list item is added to the reference list to handle shared and circular elements. See the ref element.
 
@@ -317,23 +317,17 @@ Each list item is added to the reference list to handle shared and circular elem
 
 Java数组 int[] = {0, 1}序列化后结果：
 
-V t x00 x04 [int
-
-  l x00 x00 x00 x02
-
-  I x00 x00 x00 x00
-
-  I x00 x00 x00 x01
-
-  z
+	V t x00 x04 [int
+	  l x00 x00 x00 x02
+	  I x00 x00 x00 x00
+	  I x00 x00 x00 x01
+	  z
 
 不指定长度不指定类型list = {0, "foobar"}序列化后结果：
 
-V I x00 x00 x00 x00
-
-  S x00 x06 foobar
-
-  z
+	V I x00 x00 x00 x00
+	  S x00 x06 foobar
+	  z
 
 注意：The valid values of type are not specified in this document and may depend on the specific application. For example, a Java EJB server which exposes an Hessian interface can use the type information to instantiate the specific array type. On the other hand, a Perl server would likely ignore the contents of type entirely and create a generic array.
 
@@ -355,42 +349,29 @@ type可以为空，例如长度为零。当type为空的时候，parser自己选
 	  int mileage = 65536;
 	}
 
-M t x00 x13 com.caucho.test.Car
-
-  S x00 x05 model
-
-  S x00 x06 Beetle
-
-  S x00 x05 color
-
-  S x00 x0a aquamarine
-
-  S x00 x07 mileage
-
-  I x00 x01 x00 x00
-
-  z
+	M t x00 x13 com.caucho.test.Car
+	  S x00 x05 model
+	  S x00 x06 Beetle
+	  S x00 x05 color
+	  S x00 x0a aquamarine
+	  S x00 x07 mileage
+	  I x00 x01 x00 x00
+	  z
 
 A sparse array
 
-map = new HashMap();
-map.put(new Integer(1), "fee");
-map.put(new Integer(16), "fie");
-map.put(new Integer(256), "foe");
+	map = new HashMap();
+	map.put(new Integer(1), "fee");
+	map.put(new Integer(16), "fie");
+	map.put(new Integer(256), "foe");
 
-M I x00 x00 x00 x01
-
-  S x00 x03 fee
-
-  I x00 x00 x00 x10
-
-  S x00 x03 fie
-
-  I x00 x00 x01 x00
-
-  S x00 x03 foe
-
-  z
+	M I x00 x00 x00 x01
+	  S x00 x03 fee
+	  I x00 x00 x00 x10
+	  S x00 x03 fie
+	  I x00 x00 x01 x00
+	  S x00 x03 foe
+	  z
 
 注意：The type is chosen by the service. Often it may be the Java classname describing the service.
 
@@ -399,7 +380,7 @@ M I x00 x00 x00 x01
 
 一个整数，用以指代前面的list 或者 map。输入流中每个对象有序，第一个map & list被赋值0，下一个是1，依次赋值之，这个数字就可以认为是这个对象的ID，后面引用这个对象时候使用其ID即可。写者无需理解ID具体指代的对象，但是parser则必须理解。
 
-ref ::= R b32 b24 b16 b8
+	ref ::= R b32 b24 b16 b8
 
 ref可以使用一个还未读取完整的对象。例如一个环形链表虽然没有被完全读完，但是可以引用其第一个element。
 
@@ -411,17 +392,12 @@ circular list
 	list.head = 1;
 	list.tail = list;
 
-M t x00 x0a LinkedList
-
-  S x00 x04 head
-
-  I x00 x00 x00 x01
-
-  S x00 x04 tail
-
-  R x00 x00 x00 x00
-
-  z
+	M t x00 x0a LinkedList
+	  S x00 x04 head
+	  I x00 x00 x00 x01
+	  S x00 x04 tail
+	  R x00 x00 x00 x00
+	  z
 
 注意：
 ref只能指代一个list 和 map元素，string 和 binary对象只能以list or map形式被引用。
@@ -433,8 +409,8 @@ ref只能指代一个list 和 map元素，string 和 binary对象只能以list o
 
 remote ::= r t b16 b8 type-name S b16 b8 url
 EJB Session Reference
-r t x00 x0c test.TestObj
-  S x00 x24 http://slytherin/ejbhome?id=69Xm8-zW
+	r t x00 x0c test.TestObj
+	  S x00 x24 http://slytherin/ejbhome?id=69Xm8-zW
 
 ### CALL ###
 ---
@@ -445,23 +421,17 @@ call ::= c x01 x00 header* m b16 b8 method-string (object)* z
 
 obj.add2(2,3) call
 
-c x01 x00
-
-  m x00 x04 add2
-
-  I x00 x00 x00 x02
-
-  I x00 x00 x00 x03
-
-  z
+	c x01 x00
+	  m x00 x04 add2
+	  I x00 x00 x00 x02
+	  I x00 x00 x00 x03
+	  z
 
 obj.add2(2,3) reply
 
-r x01 x00
-
-  I x00 x00 x00 x05
-
-  z
+	r x01 x00
+	  I x00 x00 x00 x05
+	  z
 
 #### OBJECT NAMING(NON-NORMATIVE) ####
 ---
@@ -479,16 +449,16 @@ http://hostname/hessian代表一个EJB container，而在Resin-EJB中它代表EJ
 /ejb-name是请求path信息，代表EJB名称，指定home interface。EJB container中可以有众多entity和session beans。object-id代表特定对象，Home interfaces没有像";ejbid=..."这样的组成部分。
 
 Entity Home Identifier
-http://localhost/hessian/my-entity-bean
+	http://localhost/hessian/my-entity-bean
 
 Entity Bean Identifier
-http://localhost/hessian/my-entity-bean?ejbid=slytherin
+	http://localhost/hessian/my-entity-bean?ejbid=slytherin
 
 Session Home Identifier
-http://localhost/hessian/my-session-bean
+	http://localhost/hessian/my-session-bean
 
 Session Bean Identifier
-http://localhost/hessian/my-session-bean?ejbid=M9Zs1Zm
+	http://localhost/hessian/my-session-bean?ejbid=M9Zs1Zm
 
 #### METHODS AND OVERLOADING ####
 ---
@@ -498,30 +468,30 @@ Method名称须是唯一。method须支持两种形式的重载：参数个数�
 Servers要既能支持mangled method name也能支持unmangled method name。客户端发送的方法名称则须是mangled method name。
 
 java函数名称编码例子如下：
-add(int a, int b)
-add_int_int
-add(double a, double b)
-add_double_double
-add(shopping.Cart cart, shopping.Item item)
-add_shopping.Cart_shopping.Item
+	add(int a, int b)
+	add_int_int
+	add(double a, double b)
+	add_double_double
+	add(shopping.Cart cart, shopping.Item item)
+	add_shopping.Cart_shopping.Item
 
 #### ARGUMENTS ####
 ---
 
 参数紧跟在method后面，以Hessian形式编码，参数可以是引用形式。
 
-remote.eq(bean, bean)
-bean = new qa.Bean("foo", 13);
+	remote.eq(bean, bean)
+	bean = new qa.Bean("foo", 13);
+	System.out.println(remote.eq(bean, bean));
 
-System.out.println(remote.eq(bean, bean));
-c x01 x00
-  m x00 x02 eq
-  M t x00 x07 qa.Bean
-    S x00 x03 foo
-    I x00 x00 x00 x0d
-    z
-  R x00 x00 x00 x00
-  z
+	c x01 x00
+	  m x00 x02 eq
+	  M t x00 x07 qa.Bean
+		S x00 x03 foo
+		I x00 x00 x00 x0d
+		z
+	  R x00 x00 x00 x00
+	  z
 
 参数的个数以及类型由远端方法确定，禁止客户端使用变参方法。
 
@@ -531,13 +501,13 @@ c x01 x00
 Headers以(string, object)形式存在，在参数列表前面。Header的值可以是任意形式的序列化对象，如一个请求可以把事物的context放入header中。
 
 Call with Distributed Transaction Context
-c x01 x00
-  H x00 x0b transaction
-  r t x00 x28 com.caucho.hessian.xa.TransactionManager
-    S x00 x23 http://hostname/xa?ejbid=01b8e19a77
-  m x00 x05 debug
-  I x00 x03 x01 xcb
-  z
+	c x01 x00
+	  H x00 x0b transaction
+	  r t x00 x28 com.caucho.hessian.xa.TransactionManager
+		S x00 x23 http://hostname/xa?ejbid=01b8e19a77
+	  m x00 x05 debug
+	  I x00 x03 x01 xcb
+	  z
 
 #### VERSIONING ####
 ---
@@ -548,9 +518,9 @@ c x01 x00
 ---
 
 正常响应
-valid-reply ::= r x01 x00 header* object z
+	valid-reply ::= r x01 x00 header* object z
 带有错误信息的响应
-fault-reply ::= r x01 x00 header* fault z
+	fault-reply ::= r x01 x00 header* fault z
 
 #### VALUE ####
 ---
@@ -558,9 +528,10 @@ fault-reply ::= r x01 x00 header* fault z
 如果处理请求成功，其reply应该回复一个成功值以及一些头部信息。
 
 integer 5 result
-r x01 x00
-  I x00 x00 x00 x05
-  z
+
+	r x01 x00
+	  I x00 x00 x00 x05
+	  z
 
 #### FAULTS ####
 ---
@@ -571,26 +542,24 @@ r x01 x00
 
 远程调用返回FileNotFoundException：
 
-r x01 x00
-  f
-  S x00 x04 code
-  S x00 x10 ServiceException
-
-  S x00 x07 message
-  S x00 x0e File Not Found
-
-  S x00 x06 detail
-  M t x00 x1d java.io.FileNotFoundException
-    z
-  z
+	r x01 x00
+	  f
+	  S x00 x04 code
+	  S x00 x10 ServiceException
+	  S x00 x07 message
+	  S x00 x0e File Not Found
+	  S x00 x06 detail
+	  M t x00 x1d java.io.FileNotFoundException
+		z
+	  z
 
 Hessian预定义好的exception：
 
-ProtocolException	The Hessian request has some sort of syntactic error.
-NoSuchObjectException	The requested object does not exist.
-NoSuchMethodException	The requested method does not exist.
-RequireHeaderException	A required header was not understood by the server.
-ServiceException	The called method threw an exception.
+	ProtocolException	The Hessian request has some sort of syntactic error.
+	NoSuchObjectException	The requested object does not exist.
+	NoSuchMethodException	The requested method does not exist.
+	RequireHeaderException	A required header was not understood by the server.
+	ServiceException	The called method threw an exception.
 
 #### METADATA(NON-NORMATIVE) ####
 ---
@@ -599,20 +568,20 @@ ServiceException	The called method threw an exception.
 
 _hessian_getAttribute(String key)返回一个字符串，下面是由本标准定义的一些metadata：
 
-ATTRIBUTE	MEANING
-java.api.class	Java interface for this URL
-java.home.class	Java interface for this service
-java.object.class	Java interface for a service object
-java.ejb.primary.key.class	Java EJB primary key class
-"java.api.class" returns the client proxy's Java API class for the current URL. "java.home.class" returns the API class for the factory URL, i.e. without any "?id=XXX" query string. "java.object.class" returns the API class for object instances.
+	ATTRIBUTE	MEANING
+	java.api.class	Java interface for this URL
+	java.home.class	Java interface for this service
+	java.object.class	Java interface for a service object
+	java.ejb.primary.key.class	Java EJB primary key class
+	"java.api.class" returns the client proxy's Java API class for the current URL. "java.home.class" returns the API class for the factory URL, i.e. without any "?id=XXX" query string. "java.object.class" returns the API class for object instances.
 
 In the case of services with no object instances, i.e. non-factory services, all three attributes will return the same class name.
 
 过时的metadata：
-ATTRIBUTE	MEANING
-home-class	Java class for the home interface.
-remote-class	Java class for the object interface.
-primary-key-class	Java class for the primary key.
+	ATTRIBUTE	MEANING
+	home-class	Java class for the home interface.
+	remote-class	Java class for the object interface.
+	primary-key-class	Java class for the primary key.
 
 #### MICRO HESSIAN ####
 ---
@@ -622,44 +591,44 @@ primary-key-class	Java class for the primary key.
 #### FORMAL DEFINITIONS ####
 ---
 
-top     ::= call
-        ::= replycall    ::= c x01 x00 header* methodobject* z
+	top     ::= call
+			::= replycall    ::= c x01 x00 header* methodobject* z
 
-reply   ::= r x01 x00 header* object z
-        ::= r x01 x00 header* fault z
+	reply   ::= r x01 x00 header* object z
+			::= r x01 x00 header* fault z
 
-object  ::= null
-        ::= boolean
-        ::= int
-        ::= long
-        ::= double
-        ::= date
-        ::= string
-        ::= xml
-        ::= binary
-        ::= remote
-        ::= ref
-        ::= list
-        ::= mapheader  ::= H b16 b8 header-string objectmethod  ::= m b16 b8 method-string
+	object  ::= null
+			::= boolean
+			::= int
+			::= long
+			::= double
+			::= date
+			::= string
+			::= xml
+			::= binary
+			::= remote
+			::= ref
+			::= list
+			::= mapheader  ::= H b16 b8 header-string objectmethod  ::= m b16 b8 method-string
 
-fault   ::= f (objectobject)* z
+	fault   ::= f (objectobject)* z
 
-list    ::= V type? length? object* z
-map     ::= M type? (objectobject)* z
-remote  ::= r type? stringtype    ::= t b16 b8 type-string
-length  ::= l b32 b24 b16 b8
+	list    ::= V type? length? object* z
+	map     ::= M type? (objectobject)* z
+	remote  ::= r type? stringtype    ::= t b16 b8 type-string
+	length  ::= l b32 b24 b16 b8
 
-null    ::= N
-boolean ::= T
-        ::= F
-int     ::= I b32 b24 b16 b8
-long    ::= L b64 b56 b48 b40 b32 b24 b16 b8
-double  ::= D b64 b56 b48 b40 b32 b24 b16 b8
-date    ::= d b64 b56 b48 b40 b32 b24 b16 b8
-string  ::= (s b16 b8 string-data)* S b16 b8 string-data
-xml     ::= (x b16 b8 xml-data)* X b16 b8 xml-data
-binary  ::= (b b16 b8 binary-data)* B b16 b8 binary-data
-ref     ::= R b32 b24 b16 b8
+	null    ::= N
+	boolean ::= T
+			::= F
+	int     ::= I b32 b24 b16 b8
+	long    ::= L b64 b56 b48 b40 b32 b24 b16 b8
+	double  ::= D b64 b56 b48 b40 b32 b24 b16 b8
+	date    ::= d b64 b56 b48 b40 b32 b24 b16 b8
+	string  ::= (s b16 b8 string-data)* S b16 b8 string-data
+	xml     ::= (x b16 b8 xml-data)* X b16 b8 xml-data
+	binary  ::= (b b16 b8 binary-data)* B b16 b8 binary-data
+	ref     ::= R b32 b24 b16 b8
 
 ## hessian v2 readme ##
 ---
@@ -671,52 +640,52 @@ ref     ::= R b32 b24 b16 b8
 
 RPC/Messaging Grammar
 
-top       ::= version content
-          ::= call-1.0
-          ::= reply-1.0
+	top       ::= version content
+			  ::= call-1.0
+			  ::= reply-1.0
 
-          # RPC-style call
-call      ::= 'C' string int value*
+			  # RPC-style call
+	call      ::= 'C' string int value*
 
-call-1.0  ::= 'c' x01 x00 <hessian-1.0-call>
+	call-1.0  ::= 'c' x01 x00 <hessian-1.0-call>
 
-content   ::= call       # rpc call
-          ::= fault      # rpc fault reply
-          ::= reply      # rpc value reply
-          ::= packet+    # streaming packet data
-          ::= envelope+  # envelope wrapping content
+	content   ::= call       # rpc call
+			  ::= fault      # rpc fault reply
+			  ::= reply      # rpc value reply
+			  ::= packet+    # streaming packet data
+			  ::= envelope+  # envelope wrapping content
 
-envelope  ::= 'E' string env-chunk* 'Z'
-env-chunk ::= int (string value)* packet int (string value)*
+	envelope  ::= 'E' string env-chunk* 'Z'
+	env-chunk ::= int (string value)* packet int (string value)*
 
-          # RPC fault
-fault     ::= 'F' (value value)* 'Z'
+			  # RPC fault
+	fault     ::= 'F' (value value)* 'Z'
 
-          # message/streaming message
-packet    ::= (x4f b1 b0 <data>)* packet
-          ::= 'P' b1 b0 <data>
-          ::= [x70 - x7f] <data>
-          ::= [x80 - xff] <data>
+			  # message/streaming message
+	packet    ::= (x4f b1 b0 <data>)* packet
+			  ::= 'P' b1 b0 <data>
+			  ::= [x70 - x7f] <data>
+			  ::= [x80 - xff] <data>
 
-          # RPC reply
-reply     ::= 'R' value
+			  # RPC reply
+	reply     ::= 'R' value
 
-reply-1.0 ::= 'r' x01 x00 <hessian-1.0-reply>
+	reply-1.0 ::= 'r' x01 x00 <hessian-1.0-reply>
 
-version   ::= 'H' x02 x00
+	version   ::= 'H' x02 x00
 
 4.  Messages and Envelopes
 
 Hessian message syntax organizes serialized data for messaging and RPC applications. The envelope syntax enables compression, encryption, signatures, and any routing or context headers to wrap a Hessian message.
 
-Call ('C'): contains a Hessian RPC call, with a method name and arguments.
-Envelope ('E'): wraps a Hessian message for compression, encryption, etc. Envelopes can be nested.
-Hessian ('H'): introduces a Hessian stream and indicates its version.
-Packet ('P'): contains a sequence of serialized Hessian objects.
-Reply ('R'): contains a reply to a Hessian RPC call.
-Fault ('F'): contains a reply to a failed Hessian RPC call.
-Hessian 1.0 compatibility call ('c'): is a Hessian 1.0 call.
-Hessian 1.0 compatibility reply ('cr): is a Hessian 2.0 call.
+	Call ('C'): contains a Hessian RPC call, with a method name and arguments.
+	Envelope ('E'): wraps a Hessian message for compression, encryption, etc. Envelopes can be nested.
+	Hessian ('H'): introduces a Hessian stream and indicates its version.
+	Packet ('P'): contains a sequence of serialized Hessian objects.
+	Reply ('R'): contains a reply to a Hessian RPC call.
+	Fault ('F'): contains a reply to a failed Hessian RPC call.
+	Hessian 1.0 compatibility call ('c'): is a Hessian 1.0 call.
+	Hessian 1.0 compatibility reply ('cr): is a Hessian 2.0 call.
 
 4.1.  Call
 
@@ -767,14 +736,14 @@ All arguments share references, i.e. the reference list starts with the first ar
 System.out.println(remote.eq(bean, bean));
 
 ---
-H x02 x00
-C
-  x02 eq        # method name = "eq"
-  x92           # two arguments
-  M x07 qa.Bean # first argument
-    x03 foo
-    x9d
-    Z
+	H x02 x00
+	C
+	  x02 eq        # method name = "eq"
+	  x92           # two arguments
+	  M x07 qa.Bean # first argument
+		x03 foo
+		x9d
+		Z
   Q x00         # second argument (ref to first)
  Figure 4
 The number and type of arguments are fixed by the remote method. Variable length arguments are forbidden. Implementations may take advantage of the expected type to improve performance.
@@ -786,12 +755,12 @@ The number and type of arguments are fixed by the remote method. Variable length
 
 obj.add2(2,3) call
 
-H x02 x00         # Hessian 2.0
-C                 # RPC call
-  x04 add2        # method "add2"
-  x92             # two arguments
-  x92             # 2 - argument 1
-  x93             # 3 - argument 2
+	H x02 x00         # Hessian 2.0
+	C                 # RPC call
+	  x04 add2        # method "add2"
+	  x92             # two arguments
+	  x92             # 2 - argument 1
+	  x93             # 3 - argument 2
  Figure 5
 
 obj.add2(2,3) reply
@@ -974,17 +943,17 @@ http://hostname/hessian identifies the EJB container. In Resin-EJB, this will re
 object-id identifies the specific object. For entity beans, the object-id encodes the primary key. For session beans, the object-id encodes a unique session identifier. Home interfaces have no ";ejbid=..." portion.
 
 
- # Example Entity Home Identifier
-http://localhost/hessian/my-entity-bean
+# Example Entity Home Identifier
+	http://localhost/hessian/my-entity-bean
 
 # Example Entity Bean Identifier
-http://localhost/hessian/my-entity-bean?ejbid=slytherin
+	http://localhost/hessian/my-entity-bean?ejbid=slytherin
 
 # Example Session Home Identifier
-http://localhost/hessian/my-session-bean
+	http://localhost/hessian/my-session-bean
 
 # Example Session Bean Identifier
-http://localhost/hessian/my-session-bean?ejbid=M9Zs1Zm
+	http://localhost/hessian/my-session-bean?ejbid=M9Zs1Zm
  Figure 16
 
  TOC
@@ -992,25 +961,25 @@ http://localhost/hessian/my-session-bean?ejbid=M9Zs1Zm
 
 Hessian is organized as a bytecode protocol. A Hessian reader is essentially a switch statement on the initial octet.
 
-Bytecode Encoding
+	Bytecode Encoding
 
-x00 - x42    # reserved
-x43          # rpc call ('C')
-x44          # reserved
-x45          # envelope ('E')
-x46          # fault ('F')
-x47          # reserved
-x48          # hessian version ('H')
-x49 - x4f    # reserved
-x4f          # packet chunk ('O')
-x50          # packet end ('P')
-x51          # reserved
-x52          # rpc result ('R')
-x53 - x59    # reserved
-x5a          # terminator ('Z')
-x5b - x5f    # reserved
-x70 - x7f    # final packet (0 - 4096)
-x80 - xff    # final packet for envelope (0 - 127)
+	x00 - x42    # reserved
+	x43          # rpc call ('C')
+	x44          # reserved
+	x45          # envelope ('E')
+	x46          # fault ('F')
+	x47          # reserved
+	x48          # hessian version ('H')
+	x49 - x4f    # reserved
+	x4f          # packet chunk ('O')
+	x50          # packet end ('P')
+	x51          # reserved
+	x52          # rpc result ('R')
+	x53 - x59    # reserved
+	x5a          # terminator ('Z')
+	x5b - x5f    # reserved
+	x70 - x7f    # final packet (0 - 4096)
+	x80 - xff    # final packet for envelope (0 - 127)
 
 ## micro services ##
 - 1 http://duanple.blog.163.com/blog/static/70971767201329113141336/
