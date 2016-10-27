@@ -6,18 +6,21 @@
 # FILE    : encode.go
 ******************************************************/
 
+// refers to https://github.com/xjing521/gohessian/blob/master/src/gohessian/encode.go
+
 package hessian
 
 import (
 	"bytes"
-	"log"
-	"runtime"
+	"reflect"
+	"strings"
 	"time"
 	"unicode/utf8"
 )
 
 import (
 	"github.com/AlexStocks/goext/strings"
+	log "github.com/AlexStocks/log4go"
 )
 
 // interface{} 的别名
@@ -26,6 +29,7 @@ type Any interface{}
 /*
 nil bool int8 int32 int64 float64 time.Time
 string []byte []interface{} map[interface{}]interface{}
+array object struct
 */
 
 type Encoder struct {
@@ -36,15 +40,9 @@ const (
 	ENCODER_DEBUG = false
 )
 
-func init() {
-	_, filename, _, _ := runtime.Caller(1)
-	if ENCODER_DEBUG {
-		log.SetPrefix(filename + "\n")
-	}
-}
-
+// If @v can not be encoded, the return value is nil. At present only struct may can not be encoded.
 func Encode(v interface{}, b []byte) []byte {
-	switch v.(type) {
+	// switch v.(type) {
 	case nil:
 		return encNull(b)
 
@@ -83,11 +81,27 @@ func Encode(v interface{}, b []byte) []byte {
 		b = encMap(v.(map[Any]Any), b)
 
 	default:
-		panic("unknow type")
+		t := reflect.TypeOf(v)
+		if reflect.Ptr == t.Kind() {
+			// tmp := reflect.ValueOf(v).Elem()
+			// t = reflect.TypeOf(tmp)
+			t = reflect.TypeOf(reflect.ValueOf(v).Elem())
+		}
+		switch t.Kind() {
+		case reflect.Struct:
+			b = encStruct(v, b)
+		case reflect.Slice, reflect.Array:
+			b = encList(v.([]Any), b)
+		case reflect.Map:
+			b = encMap(v.(map[Any]Any), b)
+		default:
+			log.Debug("type not Support! %s", t.Kind().String())
+			panic("unknow type")
+		}
 	}
 
 	if ENCODER_DEBUG {
-		log.Println(SprintHex(b))
+		log.Debug(SprintHex(b))
 	}
 
 	return b
@@ -150,7 +164,7 @@ func encString(v string, b []byte) []byte {
 			for i := 0; i < length; i++ {
 				if r, s, err := vBuf.ReadRune(); s > 0 && err == nil {
 					// b = append(b, []byte(string(r))...)
-					b = append(b, gxstrings.Slice(string(r))...)
+					b = append(b, gxstrings.Slice(string(r))...) // 直接基于r的内存空间把它转换为[]byte
 				}
 			}
 		}
@@ -255,4 +269,72 @@ func encMap(v map[Any]Any, b []byte) []byte {
 	b = append(b, 'z')
 
 	return b
+}
+
+// encode struct
+// attention list:
+// @v should have method "GetType" which return @v struct name
+// @v should have method "Get..." to get its member value
+func encStruct(v Any, b []byte) []byte {
+	var (
+		i          int
+		length     int
+		str        string
+		buf        *bytes.Buffer
+		vT         reflect.Type
+		vV         reflect.Value
+		methodType reflect.Value
+		typeName   reflect.Value
+		method     reflect.Method
+		rvArray    []reflect.Value
+	)
+
+	// check Type exists
+	// mast contains Type Field to convert to object
+	vV = reflect.ValueOf(v)
+	methodType = vV.MethodByName("GetType")
+	if !methodType.IsValid() {
+		log.Error("Don'T contains GetType !")
+		return nil
+	}
+
+	b = append(b, 'M')
+	//encode type Name
+	b = append(b, 't')
+	typeName = methodType.Call([]reflect.Value{})[0] //call return [string,]
+	buf = bytes.NewBufferString(typeName.String())
+	length = utf8.RuneCount(buf.Bytes())
+	b = append(b, PackUint16(uint16(length))...)
+	for i = 0; i < length; i++ {
+		if r, s, err := buf.ReadRune(); s > 0 && err == nil {
+			// b = append(b, []byte(string(r))...)
+			b = append(b, gxstrings.Slice(string(r))...) // 直接基于r的内存空间把它转换为[]byte
+		}
+	}
+
+	//encode the Fields
+	vT = reflect.TypeOf(v)
+	for i = 0; i < vT.NumMethod(); i++ {
+		method = vT.Method(i)
+		if !strings.HasPrefix(method.Name, "Get") {
+			continue
+		}
+		if strings.EqualFold(method.Name, "GetType") {
+			continue //jump type Field
+		}
+
+		//name change GetXaa to xaa
+		if method.Name[3] < 'a' {
+			str = string(method.Name[3] + 32)
+		} else {
+			str = string(method.Name[3])
+		}
+		b = encString(str+method.Name[4:], b)
+
+		//value
+		rvArray = vV.Method(i).Call([]reflect.Value{}) //return [] reflect.Value
+		b = Encode(rvArray[0].Interface(), b)          //GetXXX returns [string,]
+	} //end of for
+
+	return append(b, 'z')
 }

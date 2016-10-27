@@ -11,6 +11,7 @@
 package hessian
 
 import (
+	"fmt"
 	"reflect"
 	"testing"
 	"time"
@@ -280,5 +281,33 @@ func TestParseMap(t *testing.T) {
 	}
 	if err != nil {
 		t.Fatalf("error: %v", err)
+	}
+}
+
+func TestParseStruct(t *testing.T) {
+	var (
+		err error
+		b   []byte
+		foo Foo
+		s   interface{}
+	)
+
+	foo = Foo{"cif_individual_001", "1.0"}
+	b = Encode(&foo, b)
+	if b == nil {
+		t.Fatalf("failt to encode Foo{%#v}", foo)
+	}
+
+	h := NewHessian(b)
+	s, err = h.Parse()
+	if err != nil {
+		t.Errorf("fail to parse []byte{%#v}", b)
+	}
+	fmt.Printf("hessian.Parse(encStruct(%#v)) = {%#v}", foo, s)
+	if _, ok := s.(Foo); ok {
+		fmt.Printf("Foo\n")
+	}
+	if _, ok := s.(*Foo); ok {
+		fmt.Printf("*Foo\n")
 	}
 }

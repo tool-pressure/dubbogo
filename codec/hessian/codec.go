@@ -15,9 +15,9 @@ import (
 	"strings"
 )
 
-// func PackInt8(v int8, b []byte) []byte {
-// 	return append(b, byte(v))
-// }
+func PackInt8(v int8, b []byte) []byte {
+	return append(b, byte(v))
+}
 
 //[10].pack('N').bytes => [0, 0, 0, 10]
 // func PackInt16(v int16, b []byte) []byte {
@@ -57,6 +57,7 @@ func PackInt64(v int64) []byte {
 
 //[10].pack('G').bytes => [64, 36, 0, 0, 0, 0, 0, 0]
 // func PackFloat64(v float64, b []byte) []byte {
+// 直接使用math库相关函数优化float64的pack/unpack
 func PackFloat64(v float64) []byte {
 	var array [8]byte
 	binary.BigEndian.PutUint64(array[:8], math.Float64bits(v))

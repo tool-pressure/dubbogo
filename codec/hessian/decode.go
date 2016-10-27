@@ -13,6 +13,7 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"reflect"
 	"time"
 )
 
@@ -28,6 +29,7 @@ type Hessian struct {
 var (
 	ErrNotEnoughBuf    = fmt.Errorf("not enough buf")
 	ErrIllegalRefIndex = fmt.Errorf("illegal ref index")
+	typeReg            = make(map[string]reflect.Type)
 )
 
 // func NewHessian(r io.Reader) *Hessian {
@@ -106,6 +108,40 @@ func (this *Hessian) readType() string {
 	var tLen = UnpackInt16(this.peek(3)[1:3]) // 取类型字符串长度
 	var b = make([]rune, 3+tLen)
 	return string(this.nextRune(b)[3:]) //取类型名称
+}
+
+// 解析struct
+func showReg() {
+	for k, v := range typeReg {
+		fmt.Println("-->> show Registered types <<----")
+		fmt.Println(k, v)
+	}
+
+}
+
+func Reg(s string, t reflect.Type) {
+	typeReg[s] = t
+}
+
+//checkExists
+func hasReg(s string) bool {
+	if len(s) == 0 {
+		return false
+	}
+	_, exists := typeReg[s]
+	return exists
+}
+
+//gen a new Instance of s type
+func gen(s string) interface{} {
+	var ret interface{}
+	t, ok := typeReg[s]
+	if !ok {
+		return nil
+	}
+	ret = reflect.New(t).Interface()
+	fmt.Println("gen", t)
+	return ret
 }
 
 //解析 hessian 数据包
@@ -256,26 +292,66 @@ func (this *Hessian) Parse() (interface{}, error) {
 
 	case 'M': //map
 		var (
-			k      Any
-			v      Any
-			chunks map[Any]Any
+			k          Any
+			v          Any
+			t          string
+			key        interface{}
+			value      interface{}
+			tmpV       interface{}
+			chunks     map[Any]Any
+			keyName    string
+			methodName string
+			nv         reflect.Value
+			args       []reflect.Value
 		)
-		chunks = make(map[Any]Any)
-		this.readType() // 忽略
-		for this.peekByte() != byte('z') {
-			k, err = this.Parse()
-			if err != nil {
-				return nil, err
+
+		t = this.readType()
+		if !hasReg(t) {
+			chunks = make(map[Any]Any)
+			// this.readType() // 忽略
+			for this.peekByte() != byte('z') {
+				k, err = this.Parse()
+				if err != nil {
+					return nil, err
+				}
+				v, err = this.Parse()
+				if err != nil {
+					return nil, err
+				}
+				chunks[k] = v
 			}
-			v, err = this.Parse()
-			if err != nil {
-				return nil, err
+			this.readByte()
+			this.appendRefs(&chunks)
+			return chunks, nil
+		} else {
+			tmpV = gen(t)
+			for this.peekByte() != 'z' {
+				key, err = this.Parse()
+				if err != nil {
+					return nil, err
+				}
+				value, err = this.Parse()
+				if err != nil {
+					return nil, err
+				}
+				//set value of the struct     Zero will be passed
+				if nv = reflect.ValueOf(value); nv.IsValid() {
+					keyName = key.(string)
+					if keyName[0] >= 'a' { //convert to Upper
+						methodName = "Set" + string(keyName[0]-32) + keyName[1:]
+					} else {
+						methodName = "Set" + keyName
+					}
+
+					args = args[:0]
+					args = append(args, reflect.ValueOf(value))
+					reflect.ValueOf(tmpV).MethodByName(methodName).Call(args)
+				}
 			}
-			chunks[k] = v
+			// v = tmpV
+			this.appendRefs(&tmpV)
+			return tmpV, nil
 		}
-		this.readByte()
-		this.appendRefs(&chunks)
-		return chunks, nil
 
 	case 'f': //fault
 		this.Parse() //drop "code"

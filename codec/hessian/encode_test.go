@@ -10,6 +10,7 @@ package hessian
 
 import (
 	"bytes"
+	"fmt"
 	"testing"
 	"time"
 )
@@ -127,4 +128,43 @@ func TestEncMap(t *testing.T) {
 	if len(b) == 0 {
 		t.Fail()
 	}
+}
+
+type Foo struct {
+	tx      string
+	version string
+}
+
+func (f *Foo) GetType() string {
+	return "foo"
+}
+
+func (f *Foo) GetTx() string {
+	return f.tx
+}
+
+func (f *Foo) SetTx(v string) {
+	f.tx = v
+}
+
+func (f *Foo) GetVersion() string {
+	return f.version
+}
+
+func (f *Foo) SetVersion(v string) {
+	f.version = v
+}
+
+func TestEncStruct(t *testing.T) {
+	var (
+		b   []byte
+		foo Foo
+	)
+
+	foo = Foo{"cif_individual_001", "1.0"}
+	b = Encode(&foo, b)
+	if b == nil {
+		t.Fatalf("failt to encode Foo{%#v}", foo)
+	}
+	fmt.Printf("encStruct(%#v) = []byte{%#v}", foo, b)
 }
