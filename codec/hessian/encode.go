@@ -42,7 +42,7 @@ const (
 
 // If @v can not be encoded, the return value is nil. At present only struct may can not be encoded.
 func Encode(v interface{}, b []byte) []byte {
-	// switch v.(type) {
+	switch v.(type) {
 	case nil:
 		return encNull(b)
 
