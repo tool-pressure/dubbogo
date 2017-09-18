@@ -18,7 +18,6 @@ import (
 )
 
 import (
-	"github.com/AlexStocks/gocolor"
 	log "github.com/AlexStocks/log4go"
 )
 
@@ -167,7 +166,6 @@ func (this *zookeeperRegistry) registerZookeeperNode(root string, data []byte) e
 		zkPath string
 	)
 
-	gocolor.Debug("register path{root:%s}", root)
 	// 假设root是/dubbo/com.ofpay.demo.api.UserProvider/consumers/jsonrpc，则创建完成的时候zkPath
 	// 是/dubbo/com.ofpay.demo.api.UserProvider/consumers/jsonrpc/0000000000之类的临时节点.
 	// 这个节点在连接有效的时候回一直存在，直到退出的时候才会被删除。
