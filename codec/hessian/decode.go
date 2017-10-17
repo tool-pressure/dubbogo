@@ -11,75 +11,78 @@ package hessian
 import (
 	"bufio"
 	"bytes"
+	"encoding/binary"
 	"fmt"
 	"io"
+	"math"
 	"reflect"
+	"strings"
 	"time"
 )
 
-const (
-	PARSE_DEBUG = true
+import (
+	"github.com/pkg/errors"
 )
 
-type Hessian struct {
-	reader *bufio.Reader
-	refs   []Any
+type Decoder struct {
+	reader     *bufio.Reader
+	refs       []interface{}
+	clsDefList []classDef
 }
 
 var (
 	ErrNotEnoughBuf    = fmt.Errorf("not enough buf")
 	ErrIllegalRefIndex = fmt.Errorf("illegal ref index")
-	typeReg            = make(map[string]reflect.Type)
 )
 
-// func NewHessian(r io.Reader) *Hessian {
-// 	return &Hessian{reader: bufio.NewReader(r)}
-// }
-
-// func NewHessianWithBuf(b []byte) *Hessian {
-// 	return NewHessian(bytes.NewReader(b))
-// }
-
-func NewHessian(b []byte) *Hessian {
-	return &Hessian{reader: bufio.NewReader(bytes.NewReader(b))}
+func NewDecoder(b []byte) *Decoder {
+	return &Decoder{reader: bufio.NewReader(bytes.NewReader(b))}
 }
 
-//读取当前字节,指针不前移
-func (this *Hessian) peekByte() byte {
-	return this.peek(1)[0]
+/////////////////////////////////////////
+// utilities
+/////////////////////////////////////////
+
+// 读取当前字节,指针不前移
+func (d *Decoder) peekByte() byte {
+	return d.peek(1)[0]
 }
 
-//添加引用
-func (this *Hessian) appendRefs(v interface{}) {
-	this.refs = append(this.refs, v)
+// 添加引用
+func (d *Decoder) appendRefs(v interface{}) int {
+	d.refs = append(d.refs, v)
+	return len(d.refs) - 1
 }
 
-//获取缓冲长度
-func (this *Hessian) len() int {
-	this.peek(1) //需要先读一下资源才能得到已缓冲的长度
-	return this.reader.Buffered()
+// 获取缓冲长度
+func (d *Decoder) len() int {
+	d.peek(1) //需要先读一下资源才能得到已缓冲的长度
+	return d.reader.Buffered()
 }
 
-//读取 Hessian 结构中的一个字节,并后移一个字节
-func (this *Hessian) readByte() (byte, error) {
-	return this.reader.ReadByte()
+// 读取 Decoder 结构中的一个字节,并后移一个字节
+func (d *Decoder) readByte() (byte, error) {
+	return d.reader.ReadByte()
 }
 
-//读取指定长度的字节,并后移len(b)个字节
-func (this *Hessian) next(b []byte) (int, error) {
-	return this.reader.Read(b)
+// 前移一个字节
+func (d *Decoder) unreadByte() error {
+	return d.reader.UnreadByte()
 }
 
-//读取指定长度字节,指针不后移
-// func (this *Hessian) peek(n int) ([]byte, error) {
-func (this *Hessian) peek(n int) []byte {
-	// return this.reader.Peek(n)
-	b, _ := this.reader.Peek(n)
+// 读取指定长度的字节,并后移len(b)个字节
+func (d *Decoder) next(b []byte) (int, error) {
+	return d.reader.Read(b)
+}
+
+// 读取指定长度字节,指针不后移
+func (d *Decoder) peek(n int) []byte {
+	b, _ := d.reader.Peek(n)
 	return b
 }
 
-//读取len(s)的 utf8 字符
-func (this *Hessian) nextRune(s []rune) []rune {
+// 读取len(s)的 utf8 字符
+func (d *Decoder) nextRune(s []rune) []rune {
 	var (
 		n  int
 		i  int
@@ -91,7 +94,7 @@ func (this *Hessian) nextRune(s []rune) []rune {
 	n = len(s)
 	s = s[:0]
 	for i = 0; i < n; i++ {
-		if r, ri, e = this.reader.ReadRune(); e == nil && ri > 0 {
+		if r, ri, e = d.reader.ReadRune(); e == nil && ri > 0 {
 			s = append(s, r)
 		}
 	}
@@ -99,243 +102,833 @@ func (this *Hessian) nextRune(s []rune) []rune {
 	return s
 }
 
-//读取数据类型描述,用于 list 和 map
-func (this *Hessian) readType() string {
-	if this.peekByte() != byte('t') {
-		return ""
+// 读取数据类型描述,用于 list 和 map
+func (d *Decoder) decType() (string, error) {
+	var (
+		err error
+		arr [1]byte
+		buf []byte
+		tag byte
+		idx int32
+		typ reflect.Type
+	)
+
+	buf = arr[:1]
+	if _, err = io.ReadFull(d.reader, buf); err != nil {
+		return "", newCodecError("decType reading tag", err)
+	}
+	tag = buf[0]
+	if (tag >= BC_STRING_DIRECT && tag <= STRING_DIRECT_MAX) ||
+		(tag >= 0x30 && tag <= 0x33) || (tag == BC_STRING) || (tag == BC_STRING_CHUNK) {
+		return d.decString(int32(tag))
 	}
 
-	var tLen = UnpackInt16(this.peek(3)[1:3]) // 取类型字符串长度
-	var b = make([]rune, 3+tLen)
-	return string(this.nextRune(b)[3:]) //取类型名称
-}
-
-// 解析struct
-func showReg() {
-	for k, v := range typeReg {
-		fmt.Println("-->> show Registered types <<----")
-		fmt.Println(k, v)
+	if idx, err = d.decInt32(TAG_READ); err != nil {
+		return "", newCodecError("decType reading tag", err)
 	}
 
-}
-
-func Reg(s string, t reflect.Type) {
-	typeReg[s] = t
-}
-
-//checkExists
-func hasReg(s string) bool {
-	if len(s) == 0 {
-		return false
+	typ, _, err = d.getStructDefByIndex(int(idx))
+	if err == nil {
+		return typ.String(), nil
 	}
-	_, exists := typeReg[s]
-	return exists
+
+	return "", err
 }
 
-//gen a new Instance of s type
-func gen(s string) interface{} {
-	var ret interface{}
-	t, ok := typeReg[s]
-	if !ok {
-		return nil
-	}
-	ret = reflect.New(t).Interface()
-	fmt.Println("gen", t)
-	return ret
-}
-
-//解析 hessian 数据包
-func (this *Hessian) Parse() (interface{}, error) {
+// 解析 hessian 数据包
+func (d *Decoder) Decode() (interface{}, error) {
 	var (
 		err error
 		t   byte
-		l   int
-		a   []byte
-		s   []byte
 	)
 
-	a = make([]byte, 16)
-	t, err = this.readByte()
+	t, err = d.readByte()
 	if err == io.EOF {
 		return nil, err
 	}
-	switch t {
-	case 'N': //null
+	switch {
+	case t == BC_END:
 		return nil, nil
 
-	case 'T': //true
+	case t == BC_NULL: // 'N': //null
+		return nil, nil
+
+	case t == BC_TRUE: // 'T': //true
 		return true, nil
 
-	case 'F': //false
+	case t == BC_FALSE: //'F': //false
 		return false, nil
 
-	case 'I': //int
-		s = a[:4]
-		l, err = this.next(s)
+	case (0x80 <= t && t <= 0xbf) || (0xc0 <= t && t <= 0xcf) ||
+		(0xd0 <= t && t <= 0xd7) || t == BC_INT: //'I': //int
+		return d.decInt32(int32(t))
+
+	case (t >= 0xd8 && t <= 0xef) || (t >= 0xf4 && t <= 0xff) ||
+		(t >= 0x38 && t <= 0x3f) || (t == BC_LONG_INT) || (t == BC_LONG): //'L': //long
+		return d.decInt64(int32(t))
+
+	case (t == BC_DATE_MINUTE) || (t == BC_DATE): //'d': //date
+		return d.decDate(int32(t))
+
+	case (t == BC_DOUBLE_ZERO) || (t == BC_DOUBLE_ONE) || (t == BC_DOUBLE_BYTE) ||
+		(t == BC_DOUBLE_SHORT) || (t == BC_DOUBLE_MILL) || (t == BC_DOUBLE): //'D': //double
+		return d.decDouble(int32(t))
+
+	// case 'S', 's', 'X', 'x': //string,xml
+	case (t == BC_STRING_CHUNK || t == BC_STRING) ||
+		(t >= BC_STRING_DIRECT && t <= STRING_DIRECT_MAX) ||
+		(t >= 0x30 && t <= 0x33):
+		return d.decString(int32(t))
+
+		// case 'B', 'b': //binary
+	case (t == BC_BINARY) || (t == BC_BINARY_CHUNK) || (t >= 0x20 && t <= 0x2f):
+		return d.decBinary(int32(t))
+
+	// case 'V': //list
+	case (t >= BC_LIST_DIRECT && t <= 0x77) || (t == BC_LIST_FIXED || t == BC_LIST_VARIABLE) ||
+		(t >= BC_LIST_DIRECT_UNTYPED && t <= 0x7f) ||
+		(t == BC_LIST_FIXED_UNTYPED || t == BC_LIST_VARIABLE_UNTYPED):
+		return d.decList(int32(t))
+
+	case (t == BC_MAP) || (t == BC_MAP_UNTYPED):
+		return d.decMap(int32(t))
+
+	case (t == BC_OBJECT_DEF) || (t == BC_OBJECT) ||
+		(BC_OBJECT_DIRECT <= t && t <= (BC_OBJECT_DIRECT+OBJECT_DIRECT_MAX)):
+		return d.decObject(int32(t))
+
+	case (t == BC_REF): // 'R': //ref, 一个整数，用以指代前面的list 或者 map
+		return d.decRef(int32(t))
+
+	default:
+		return nil, fmt.Errorf("Invalid type: %v,>>%v<<<", string(t), d.peek(d.len()))
+	}
+}
+
+/////////////////////////////////////////
+// Int32
+/////////////////////////////////////////
+
+// # 32-bit signed integer
+// ::= 'I' b3 b2 b1 b0
+// ::= [x80-xbf]             # -x10 to x3f
+// ::= [xc0-xcf] b0          # -x800 to x7ff
+// ::= [xd0-xd7] b1 b0       # -x40000 to x3ffff
+func (d *Decoder) decInt32(flag int32) (int32, error) {
+	var (
+		err error
+		tag byte
+		buf [4]byte
+	)
+
+	if flag != TAG_READ {
+		tag = byte(flag)
+	} else {
+		tag, _ = d.readByte()
+	}
+
+	switch {
+	//direct integer
+	case tag >= 0x80 && tag <= 0xbf:
+		return int32(tag - BC_INT_ZERO), nil
+
+	case tag >= 0xc0 && tag <= 0xcf:
+		if _, err = io.ReadFull(d.reader, buf[:1]); err != nil {
+			return 0, newCodecError("decInt32 short integer", err)
+		}
+		return int32(tag-BC_INT_BYTE_ZERO)<<8 + int32(buf[0]), nil
+
+	case tag >= 0xd0 && tag <= 0xd7:
+		if _, err = io.ReadFull(d.reader, buf[:2]); err != nil {
+			return 0, newCodecError("decInt32 short integer", err)
+		}
+		return int32(tag-BC_INT_SHORT_ZERO)<<16 + int32(buf[0])<<8 + int32(buf[1]), nil
+
+	case tag == BC_INT:
+		if _, err := io.ReadFull(d.reader, buf[:4]); err != nil {
+			return 0, newCodecError("decInt32 parse int", err)
+		}
+		return int32(buf[0])<<24 + int32(buf[1])<<16 + int32(buf[2])<<8 + int32(buf[3]), nil
+
+	default:
+		return 0, newCodecError("decInt32 integer wrong tag:" + fmt.Sprintf("%d-%#x", int(tag), tag))
+	}
+}
+
+/////////////////////////////////////////
+// Int64
+/////////////////////////////////////////
+
+// # 64-bit signed long integer
+// ::= 'L' b7 b6 b5 b4 b3 b2 b1 b0
+// ::= [xd8-xef]             # -x08 to x0f
+// ::= [xf0-xff] b0          # -x800 to x7ff
+// ::= [x38-x3f] b1 b0       # -x40000 to x3ffff
+// ::= x59 b3 b2 b1 b0       # 32-bit integer cast to long
+func (d *Decoder) decInt64(flag int32) (int64, error) {
+	var (
+		err error
+		tag byte
+		buf [8]byte
+	)
+
+	if flag != TAG_READ {
+		tag = byte(flag)
+	} else {
+		tag, _ = d.readByte()
+	}
+
+	switch {
+	case tag >= 0xd8 && tag <= 0xef:
+		return int64(tag - BC_LONG_ZERO), nil
+
+	case tag >= 0xf4 && tag <= 0xff:
+		if _, err = io.ReadFull(d.reader, buf[:1]); err != nil {
+			return 0, newCodecError("decInt64 short integer", err)
+		}
+		return int64(tag-BC_LONG_BYTE_ZERO)<<8 + int64(buf[0]), nil
+
+	case tag >= 0x38 && tag <= 0x3f:
+		if _, err := io.ReadFull(d.reader, buf[:2]); err != nil {
+			return 0, newCodecError("decInt64 short integer", err)
+		}
+		return int64(tag-BC_LONG_SHORT_ZERO)<<16 + int64(buf[0])<<8 + int64(buf[1]), nil
+		// return int64(tag-BC_LONG_SHORT_ZERO)<<16 + int64(buf[0])*256 + int64(buf[1]), nil
+
+	case tag == BC_LONG:
+		if _, err := io.ReadFull(d.reader, buf[:8]); err != nil {
+			return 0, newCodecError("decInt64 parse long", err)
+		}
+		return int64(buf[0])<<56 + int64(buf[1])<<48 + int64(buf[2])<<40 + int64(buf[3])<<32 +
+			int64(buf[4])<<24 + int64(buf[5])<<16 + int64(buf[6])<<8 + int64(buf[7]), nil
+
+	default:
+		return 0, newCodecError("decInt64 long wrong tag " + fmt.Sprintf("%d-%#x", int(tag), tag))
+	}
+}
+
+/////////////////////////////////////////
+// Date
+/////////////////////////////////////////
+
+// # time in UTC encoded as 64-bit long milliseconds since epoch
+// ::= x4a b7 b6 b5 b4 b3 b2 b1 b0
+// ::= x4b b3 b2 b1 b0       # minutes since epoch
+func (d *Decoder) decDate(flag int32) (time.Time, error) {
+	var (
+		err error
+		l   int
+		tag byte
+		buf [8]byte
+		s   []byte
+		i64 int64
+		t   time.Time
+	)
+
+	if flag != TAG_READ {
+		tag = byte(flag)
+	} else {
+		tag, _ = d.readByte()
+	}
+
+	switch {
+	case tag == BC_DATE: //'d': //date
+		s = buf[:8]
+		l, err = d.next(s)
 		if err != nil {
-			return nil, err
+			return t, err
+		}
+		if l != 8 {
+			return t, ErrNotEnoughBuf
+		}
+		i64 = UnpackInt64(s)
+		return time.Unix(i64/1000, i64%1000*10e5), nil
+		// return time.Unix(i64/1000, i64*100), nil
+
+	case tag == BC_DATE_MINUTE:
+		s = buf[:4]
+		l, err = d.next(s)
+		if err != nil {
+			return t, err
 		}
 		if l != 4 {
-			return nil, ErrNotEnoughBuf
+			return t, ErrNotEnoughBuf
 		}
-		return UnpackInt32(s), nil
+		i64 = int64(UnpackInt32(s))
+		return time.Unix(i64*60, 0), nil
 
-	case 'L': //long
-		s = a[:8]
-		l, err = this.next(s)
+	default:
+		return t, fmt.Errorf("decDate Invalid type: %v", tag)
+	}
+}
+
+/////////////////////////////////////////
+// Double
+/////////////////////////////////////////
+
+// # 64-bit IEEE double
+// ::= 'D' b7 b6 b5 b4 b3 b2 b1 b0
+// ::= x5b                   # 0.0
+// ::= x5c                   # 1.0
+// ::= x5d b0                # byte cast to double (-128.0 to 127.0)
+// ::= x5e b1 b0             # short cast to double
+// ::= x5f b3 b2 b1 b0       # 32-bit float cast to double
+func (d *Decoder) decDouble(flag int32) (interface{}, error) {
+	var (
+		err error
+		tag byte
+		buf [8]byte
+	)
+
+	if flag != TAG_READ {
+		tag = byte(flag)
+	} else {
+		tag, _ = d.readByte()
+	}
+	switch tag {
+	case BC_LONG_INT:
+		return d.decInt32(TAG_READ)
+
+	case BC_DOUBLE_ZERO:
+		return float64(0), nil
+
+	case BC_DOUBLE_ONE:
+		return float64(1), nil
+
+	case BC_DOUBLE_BYTE:
+		tag, _ = d.readByte()
+		return float64(tag), nil
+
+	case BC_DOUBLE_SHORT:
+		if _, err = io.ReadFull(d.reader, buf[:2]); err != nil {
+			return nil, newCodecError("decDouble short integer", err)
+		}
+
+		return float64(int(buf[0])<<8 + int(buf[1])), nil
+
+	case BC_DOUBLE_MILL:
+		i, _ := d.decInt32(TAG_READ)
+		return float64(i), nil
+
+	case BC_DOUBLE:
+		if _, err = io.ReadFull(d.reader, buf[:8]); err != nil {
+			return nil, newCodecError("decDouble short integer", err)
+		}
+
+		bits := binary.BigEndian.Uint64(buf[:8])
+		datum := math.Float64frombits(bits)
+		return datum, nil
+	}
+
+	return nil, newCodecError("decDouble parse double wrong tag:" + fmt.Sprintf("%d-%#x", int(tag), tag))
+}
+
+/////////////////////////////////////////
+// String
+/////////////////////////////////////////
+
+// # UTF-8 encoded character string split into 64k chunks
+// ::= x52 b1 b0 <utf8-data> string  # non-final chunk
+// ::= 'S' b1 b0 <utf8-data>         # string of length 0-65535
+// ::= [x00-x1f] <utf8-data>         # string of length 0-31
+// ::= [x30-x34] <utf8-data>         # string of length 0-1023
+func (d *Decoder) getStrLen(tag byte) (int32, error) {
+	var (
+		err    error
+		buf    [2]byte
+		length int32
+	)
+
+	switch {
+	case tag >= BC_STRING_DIRECT && tag <= STRING_DIRECT_MAX:
+		return int32(tag - 0x00), nil
+
+	case tag >= 0x30 && tag <= 0x33:
+		_, err = io.ReadFull(d.reader, buf[:1])
 		if err != nil {
-			return nil, err
+			return -1, newCodecError("getStrLen byte4 integer", err)
 		}
-		if l != 8 {
-			return nil, ErrNotEnoughBuf
-		}
-		return UnpackInt64(s), nil
 
-	case 'd': //date
-		s = a[:8]
-		l, err = this.next(s)
+		length = int32(tag-0x30)<<8 + int32(buf[0])
+		return length, nil
+
+	case tag == BC_STRING_CHUNK || tag == BC_STRING:
+		_, err = io.ReadFull(d.reader, buf[:2])
 		if err != nil {
-			return nil, err
+			return -1, newCodecError("getStrLen byte5 integer", err)
 		}
-		if l != 8 {
-			return nil, ErrNotEnoughBuf
-		}
-		var ms = UnpackInt64(s)
-		return time.Unix(ms/1000, ms%1000*10e5), nil
+		length = int32(buf[0])<<8 + int32(buf[1])
+		return length, nil
 
-	case 'D': //double
-		s = a[:8]
-		l, err = this.next(s)
-		if err != nil {
-			return nil, err
-		}
-		if l != 8 {
-			return nil, ErrNotEnoughBuf
-		}
-		return UnpackFloat64(s), nil
+	default:
+		return -1, newCodecError("getStrLen getStrLen")
+	}
+}
 
-	case 'S', 's', 'X', 'x': //string,xml
-		var (
-			rBuf   []rune
-			chunks []rune
-		)
-		rBuf = make([]rune, CHUNK_SIZE)
-		for { //避免递归读取 Chunks
-			s = a[:2]
-			l, err = this.next(s)
-			if err != nil {
-				return nil, err
-			}
-			if l != 2 {
-				return nil, ErrNotEnoughBuf
-			}
-			l = int(UnpackInt16(s))
-			chunks = append(chunks, this.nextRune(rBuf[:l])...)
-			if t == 'S' || t == 'X' {
-				break
-			}
-			if t, err = this.readByte(); err != nil {
-				return nil, err
-			}
-		}
-		return string(chunks), nil
+func getRune(reader io.Reader) (rune, int, error) {
+	var (
+		runeNil rune
+		typ     reflect.Type
+	)
 
-	case 'B', 'b': //binary
-		var (
-			buf    []byte
-			chunks []byte //等同于 []uint8,在 反射判断类型的时候，会得到 []uint8
-		)
-		buf = make([]byte, CHUNK_SIZE)
-		for { //避免递归读取 Chunks
-			s = a[:2]
-			l, err = this.next(s)
-			if err != nil {
-				return nil, err
-			}
-			if l != 2 {
-				return nil, ErrNotEnoughBuf
-			}
-			l = int(UnpackInt16(s))
-			if l, err = this.next(buf[:l]); err != nil {
-				return nil, err
-			}
-			chunks = append(chunks, buf[:l]...)
-			if t == 'B' {
-				break
-			}
-			if t, err = this.readByte(); err != nil {
-				return nil, err
-			}
-		}
+	typ = reflect.TypeOf(reader.(interface{}))
 
-		return chunks, nil
+	if (typ == reflect.TypeOf(&bufio.Reader{})) {
+		byteReader := reader.(interface{}).(*bufio.Reader)
+		return byteReader.ReadRune()
+	}
 
-	case 'V': //list
-		var (
-			v      Any
-			chunks []Any
-		)
-		this.readType() // 忽略
-		if this.peekByte() == byte('l') {
-			this.next(a[:5])
-		}
-		for this.peekByte() != byte('z') {
-			if v, err = this.Parse(); err != nil {
-				return nil, err
-			} else {
-				chunks = append(chunks, v)
-			}
-		}
-		this.readByte()
-		this.appendRefs(&chunks)
-		return chunks, nil
+	if (typ == reflect.TypeOf(&bytes.Buffer{})) {
+		byteReader := reader.(interface{}).(*bytes.Buffer)
+		return byteReader.ReadRune()
+	}
 
-	case 'M': //map
-		var (
-			k          Any
-			v          Any
-			t          string
-			key        interface{}
-			value      interface{}
-			tmpV       interface{}
-			chunks     map[Any]Any
-			keyName    string
-			methodName string
-			nv         reflect.Value
-			args       []reflect.Value
-		)
+	if (typ == reflect.TypeOf(&bytes.Reader{})) {
+		byteReader := reader.(interface{}).(*bytes.Reader)
+		return byteReader.ReadRune()
+	}
 
-		t = this.readType()
-		if !hasReg(t) {
-			chunks = make(map[Any]Any)
-			// this.readType() // 忽略
-			for this.peekByte() != byte('z') {
-				k, err = this.Parse()
-				if err != nil {
-					return nil, err
-				}
-				v, err = this.Parse()
-				if err != nil {
-					return nil, err
-				}
-				chunks[k] = v
-			}
-			this.readByte()
-			this.appendRefs(&chunks)
-			return chunks, nil
+	return runeNil, 0, nil
+}
+
+func (d *Decoder) decString(flag int32) (string, error) {
+	var (
+		tag    byte
+		length int32
+		last   bool
+		s      string
+		r      rune
+	)
+
+	if flag != TAG_READ {
+		tag = byte(flag)
+	} else {
+		tag, _ = d.readByte()
+	}
+
+	last = true
+	if (tag >= BC_STRING_DIRECT && tag <= STRING_DIRECT_MAX) ||
+		(tag >= 0x30 && tag <= 0x33) ||
+		(tag == BC_STRING_CHUNK || tag == BC_STRING) {
+
+		if tag == BC_STRING_CHUNK {
+			last = false
 		} else {
-			tmpV = gen(t)
-			for this.peekByte() != 'z' {
-				key, err = this.Parse()
+			last = true
+		}
+
+		l, err := d.getStrLen(tag)
+		if err != nil {
+			return s, newCodecError("decString->getStrLen", err)
+		}
+		length = l
+		runeDate := make([]rune, length)
+		for i := 0; ; {
+			if int32(i) == length {
+				if last {
+					return string(runeDate), nil
+				}
+
+				b, _ := d.readByte()
+				switch {
+				case (tag >= BC_STRING_DIRECT && tag <= STRING_DIRECT_MAX) ||
+					(tag >= 0x30 && tag <= 0x33) ||
+					(tag == BC_STRING_CHUNK || tag == BC_STRING):
+
+					if b == BC_STRING_CHUNK {
+						last = false
+					} else {
+						last = true
+					}
+
+					l, err := d.getStrLen(b)
+					if err != nil {
+						return s, newCodecError("decString->getStrLen", err)
+					}
+					length += l
+					bs := make([]rune, length)
+					copy(bs, runeDate)
+					runeDate = bs
+
+				default:
+					return s, newCodecError("decString tag error ", err)
+				}
+
+			} else {
+				r, _, err = d.reader.ReadRune()
+				if err != nil {
+					return s, newCodecError("decString->ReadRune", err)
+				}
+				runeDate[i] = r
+				i++
+			}
+		}
+
+		return string(runeDate), nil
+	}
+
+	return s, newCodecError(fmt.Sprintf("unknown string tag %#x\n", tag))
+}
+
+/////////////////////////////////////////
+// Binary, []byte
+/////////////////////////////////////////
+
+// # 8-bit binary data split into 64k chunks
+// ::= x41 b1 b0 <binary-data> binary # non-final chunk
+// ::= 'B' b1 b0 <binary-data>        # final chunk
+// ::= [x20-x2f] <binary-data>        # binary data of length 0-15
+// ::= [x34-x37] <binary-data>        # binary data of length 0-1023
+func (d *Decoder) getBinaryLength(tag byte) (int, error) {
+	var (
+		err error
+		buf [2]byte
+	)
+
+	if tag >= BC_BINARY_DIRECT && tag <= INT_DIRECT_MAX {
+		return int(tag - BC_BINARY_DIRECT), nil
+	}
+
+	if _, err = io.ReadFull(d.reader, buf[:2]); err != nil {
+		return 0, newCodecError("getBinaryLength parse binary", err)
+	}
+
+	return int(buf[0]<<8 + buf[1]), nil
+}
+
+func (d *Decoder) decBinary(flag int32) ([]byte, error) {
+	var (
+		tag    byte
+		last   bool
+		length int32
+	)
+
+	if flag != TAG_READ {
+		tag = byte(flag)
+	} else {
+		tag, _ = d.readBufByte()
+	}
+
+	last = true
+	if (tag >= BC_BINARY_DIRECT && tag <= INT_DIRECT_MAX) ||
+		(tag == BC_BINARY) || (tag == BC_BINARY_CHUNK) {
+		if tag == BC_BINARY_CHUNK {
+			last = false
+		} else {
+			last = true
+		}
+		l, err := d.getBinaryLength(tag)
+		if err != nil {
+			return nil, newCodecError("decBinary->getBinaryLength", err)
+		}
+		length = int32(l)
+		data := make([]byte, length)
+		for i := 0; ; {
+			if int32(i) == length {
+				if last {
+					return data, nil
+				}
+
+				var buf [1]byte
+				_, err := io.ReadFull(d.reader, buf[:1])
+				if err != nil {
+					return nil, newCodecError("decBinary byte1 integer", err)
+				}
+				b := buf[0]
+				switch {
+				case b == BC_BINARY_CHUNK || b == BC_BINARY:
+					if b == BC_BINARY_CHUNK {
+						last = false
+					} else {
+						last = true
+					}
+					l, err := d.getStrLen(b)
+					if err != nil {
+						return nil, newCodecError("decBinary getStrLen", err)
+					}
+					length += l
+					bs := make([]byte, 0, length)
+					copy(bs, data)
+					data = bs
+				default:
+					return nil, newCodecError("decBinary tag error ", err)
+				}
+			} else {
+				var buf [1]byte
+				_, err := io.ReadFull(d.reader, buf[:1])
+				if err != nil {
+					return nil, newCodecError("decBinary byte2 integer", err)
+				}
+				data[i] = buf[0]
+				i++
+			}
+		}
+
+		return data, nil
+	} else {
+		return nil, newCodecError("decBinary byte3 integer")
+	}
+}
+
+/////////////////////////////////////////
+// List
+/////////////////////////////////////////
+
+// # list/vector
+// ::= x55 type value* 'Z'   # variable-length list
+// ::= 'V' type int value*   # fixed-length list
+// ::= x57 value* 'Z'        # variable-length untyped list
+// ::= x58 int value*        # fixed-length untyped list
+// ::= [x70-77] type value*  # fixed-length typed list
+// ::= [x78-7f] value*       # fixed-length untyped list
+
+func (d *Decoder) readBufByte() (byte, error) {
+	var (
+		err error
+		buf [1]byte
+	)
+
+	_, err = io.ReadFull(d.reader, buf[:1])
+	if err != nil {
+		return 0, newCodecError("readBufByte", err)
+	}
+
+	return buf[0], nil
+}
+
+func (d *Decoder) decSlice(value reflect.Value) (interface{}, error) {
+	var (
+		i   int
+		tag byte
+	)
+
+	tag, _ = d.readBufByte()
+	if tag >= BC_LIST_DIRECT_UNTYPED && tag <= 0x7f {
+		i = int(tag - BC_LIST_DIRECT_UNTYPED)
+	} else {
+		ii, err := d.decInt32(TAG_READ)
+		if err != nil {
+			return nil, newCodecError("decSlice->decInt32", err)
+		}
+		i = int(ii)
+	}
+
+	ary := reflect.MakeSlice(value.Type(), i, i)
+	for j := 0; j < i; j++ {
+		it, err := d.Decode()
+		if err != nil {
+			return nil, newCodecError("decSlice->ReadList", err)
+		}
+		ary.Index(j).Set(reflect.ValueOf(it))
+	}
+	d.readBufByte()
+	value.Set(ary)
+
+	return ary, nil
+}
+
+//func isBuildInType(typeName string) bool {
+//	switch typeName {
+//	case ARRAY_STRING:
+//		return true
+//	case ARRAY_INT:
+//		return true
+//	case ARRAY_FLOAT:
+//		return true
+//	case ARRAY_DOUBLE:
+//		return true
+//	case ARRAY_BOOL:
+//		return true
+//	case ARRAY_LONG:
+//		return true
+//	default:
+//		return false
+//	}
+//}
+
+func (d *Decoder) decList(flag int32) (interface{}, error) {
+	var (
+		tag  byte
+		size int
+	)
+
+	if flag != TAG_READ {
+		tag = byte(flag)
+	} else {
+		tag, _ = d.readByte()
+	}
+
+	switch {
+	case (tag >= BC_LIST_DIRECT && tag <= 0x77) || (tag == BC_LIST_FIXED || tag == BC_LIST_VARIABLE):
+		// str, err := d.decType()
+		// if err != nil {
+		// 	return nil, newCodecError("ReadType", err)
+		// }
+		d.decType() // 忽略
+		if tag >= BC_LIST_DIRECT && tag <= 0x77 {
+			size = int(tag - BC_LIST_DIRECT)
+		} else {
+			i32, err := d.decInt32(TAG_READ)
+			if err != nil {
+				return nil, newCodecError("decList->decInt32", err)
+			}
+			size = int(i32)
+		}
+		// bl := isBuildInType(str)
+		ary := make([]interface{}, size)
+		d.appendRefs(ary)
+		for j := 0; j < size; j++ {
+			it, err := d.Decode()
+			if err != nil {
+				return nil, newCodecError("decList->Decode", err)
+			}
+			ary[j] = it
+		}
+
+		if tag == BC_LIST_VARIABLE {
+			d.readBufByte()
+		}
+
+		return ary, nil
+
+	case (tag >= BC_LIST_DIRECT_UNTYPED && tag <= 0x7f) || (tag == BC_LIST_FIXED_UNTYPED || tag == BC_LIST_VARIABLE_UNTYPED):
+		if tag >= BC_LIST_DIRECT_UNTYPED && tag <= 0x7f {
+			size = int(tag - BC_LIST_DIRECT_UNTYPED)
+		} else {
+			i32, err := d.decInt32(TAG_READ)
+			if err != nil {
+				return nil, newCodecError("decList->ReadType", err)
+			}
+			size = int(i32)
+		}
+		ary := make([]interface{}, size)
+		d.appendRefs(ary)
+		for j := 0; j < size; j++ {
+			it, err := d.Decode()
+			if err != nil {
+				return nil, newCodecError("decList->Decode", err)
+			}
+			ary[j] = it
+		}
+		//read the endbyte of list
+		if tag == BC_LIST_VARIABLE_UNTYPED {
+			d.readBufByte()
+		}
+
+		return ary, nil
+
+	default:
+		return nil, newCodecError("illegal list type tag:", tag)
+	}
+}
+
+/////////////////////////////////////////
+// Map
+/////////////////////////////////////////
+
+// ::= 'M' type (value value)* 'Z'  # key, value map pairs
+// ::= 'H' (value value)* 'Z'       # untyped key, value
+func (d *Decoder) decMapByValue(value reflect.Value) (interface{}, error) {
+	var (
+		tag byte
+	)
+
+	tag, _ = d.readBufByte()
+	if tag == BC_MAP {
+		d.decString(TAG_READ)
+	} else if tag == BC_MAP_UNTYPED {
+		//do nothing
+	} else {
+		return nil, newCodecError("wrong header BC_MAP_UNTYPED")
+	}
+
+	m := reflect.MakeMap(value.Type())
+	//read key and value
+	for {
+		key, err := d.Decode()
+		if err != nil {
+			if err == io.EOF {
+				break
+			} else {
+				return nil, newCodecError("decMapByValue->ReadType", err)
+			}
+		}
+		if key == nil {
+			break
+		}
+		vl, err := d.Decode()
+		m.SetMapIndex(reflect.ValueOf(key), reflect.ValueOf(vl))
+	}
+	value.Set(m)
+
+	return m, nil
+}
+
+func (d *Decoder) decMap(flag int32) (interface{}, error) {
+	var (
+		err        error
+		tag        byte
+		ok         bool
+		k          interface{}
+		v          interface{}
+		t          string
+		keyName    string
+		methodName string
+		key        interface{}
+		value      interface{}
+		inst       interface{}
+		m          map[interface{}]interface{}
+		fieldValue reflect.Value
+		args       []reflect.Value
+	)
+
+	if flag != TAG_READ {
+		tag = byte(flag)
+	} else {
+		tag, _ = d.readByte()
+	}
+
+	switch {
+	case tag == BC_MAP:
+		if t, err = d.decType(); err != nil {
+			return nil, err
+		}
+		if _, ok = checkPOJORegistry(t); ok {
+			m = make(map[interface{}]interface{}) // 此处假设了map的定义形式，这是不对的
+			d.appendRefs(m)
+
+			// d.decType() // 忽略
+			for d.peekByte() != byte('z') {
+				k, err = d.Decode()
+				if err != nil {
+					if err == io.EOF {
+						break
+					}
+
+					return nil, err
+				}
+				v, err = d.Decode()
 				if err != nil {
 					return nil, err
 				}
-				value, err = this.Parse()
-				if err != nil {
+				m[k] = v
+			}
+			d.readByte()
+
+			return m, nil
+		} else {
+			inst = createInstance(t)
+			d.appendRefs(inst)
+
+			for d.peekByte() != 'z' {
+				if key, err = d.Decode(); err != nil {
 					return nil, err
 				}
-				//set value of the struct     Zero will be passed
-				if nv = reflect.ValueOf(value); nv.IsValid() {
+				if value, err = d.Decode(); err != nil {
+					return nil, err
+				}
+				//set value of the struct to Zero
+				if fieldValue = reflect.ValueOf(value); fieldValue.IsValid() {
 					keyName = key.(string)
 					if keyName[0] >= 'a' { //convert to Upper
 						methodName = "Set" + string(keyName[0]-32) + keyName[1:]
@@ -344,45 +937,421 @@ func (this *Hessian) Parse() (interface{}, error) {
 					}
 
 					args = args[:0]
-					args = append(args, reflect.ValueOf(value))
-					reflect.ValueOf(tmpV).MethodByName(methodName).Call(args)
+					args = append(args, fieldValue)
+					reflect.ValueOf(inst).MethodByName(methodName).Call(args)
 				}
 			}
-			// v = tmpV
-			this.appendRefs(&tmpV)
-			return tmpV, nil
+
+			return inst, nil
 		}
 
-	case 'f': //fault
-		this.Parse() //drop "code"
-		code, _ := this.Parse()
-		this.Parse() //drop "message"
-		message, _ := this.Parse()
-		return nil, fmt.Errorf("%s : %s", code, message)
+	case tag == BC_MAP_UNTYPED:
+		m = make(map[interface{}]interface{})
+		d.appendRefs(m)
+		for d.peekByte() != byte(BC_END) {
+			k, err = d.Decode()
+			if err != nil {
+				if err == io.EOF {
+					break
+				}
 
-	case 'r': //reply
-		// valid-reply ::= r x01 x00 header* object z
-		// fault-reply ::= r x01 x00 header* fault z
-		this.next(a[:2])
-		return this.Parse()
+				return nil, err
+			}
+			v, err = d.Decode()
+			if err != nil {
+				return nil, err
+			}
+			m[k] = v
+		}
+		d.readByte()
+		return m, nil
 
-	case 'R': //ref, 一个整数，用以指代前面的list 或者 map
-		s = a[:4]
-		l, err = this.next(s)
+	default:
+		return nil, newCodecError("illegal map type tag:", tag)
+	}
+}
+
+/////////////////////////////////////////
+// Object
+/////////////////////////////////////////
+
+//class-def  ::= 'C' string int string* //  mandatory type string, the number of fields, and the field names.
+//object     ::= 'O' int value* // class-def id, value list
+//           ::= [x60-x6f] value* // class-def id, value list
+//
+//Object serialization
+//
+//class Car {
+//  String color;
+//  String model;
+//}
+//
+//out.writeObject(new Car("red", "corvette"));
+//out.writeObject(new Car("green", "civic"));
+//
+//---
+//
+//C                        # object definition (#0)
+//  x0b example.Car        # type is example.Car
+//  x92                    # two fields
+//  x05 color              # color field name
+//  x05 model              # model field name
+//
+//O                        # object def (long form)
+//  x90                    # object definition #0
+//  x03 red                # color field value
+//  x08 corvette           # model field value
+//
+//x60                      # object def #0 (short form)
+//  x05 green              # color field value
+//  x05 civic              # model field value
+//
+//
+//
+//
+//
+//enum Color {
+//  RED,
+//  GREEN,
+//  BLUE,
+//}
+//
+//out.writeObject(Color.RED);
+//out.writeObject(Color.GREEN);
+//out.writeObject(Color.BLUE);
+//out.writeObject(Color.GREEN);
+//
+//---
+//
+//C                         # class definition #0
+//  x0b example.Color       # type is example.Color
+//  x91                     # one field
+//  x04 name                # enumeration field is "name"
+//
+//x60                       # object #0 (class def #0)
+//  x03 RED                 # RED value
+//
+//x60                       # object #1 (class def #0)
+//  x90                     # object definition ref #0
+//  x05 GREEN               # GREEN value
+//
+//x60                       # object #2 (class def #0)
+//  x04 BLUE                # BLUE value
+//
+//x51 x91                   # object ref #1, i.e. Color.GREEN
+
+func (d *Decoder) decClassDef() (interface{}, error) {
+	var (
+		err       error
+		clsName   string
+		fieldNum  int32
+		fieldName string
+		fieldList []string
+	)
+
+	clsName, err = d.decString(TAG_READ)
+	if err != nil {
+		return nil, newCodecError("decClassDef->decString", err)
+	}
+	fieldNum, err = d.decInt32(TAG_READ)
+	if err != nil {
+		return nil, newCodecError("decClassDef->decInt32", err)
+	}
+	fieldList = make([]string, fieldNum)
+	for i := 0; i < int(fieldNum); i++ {
+		fieldName, err = d.decString(TAG_READ)
+		if err != nil {
+			return nil, newCodecError("decClassDef->decString", err)
+		}
+		fieldList[i] = fieldName
+	}
+
+	return classDef{javaName: clsName, fieldNameList: fieldList}, nil
+}
+
+func findField(name string, typ reflect.Type) (int, error) {
+	for i := 0; i < typ.NumField(); i++ {
+		str := typ.Field(i).Name
+		if strings.Compare(str, name) == 0 {
+			return i, nil
+		}
+		// str1 := strings.Title(name)
+		str1 := strings.ToLower(str)
+		if strings.Compare(name, str1) == 0 {
+			return i, nil
+		}
+	}
+	return 0, newCodecError("findField")
+}
+
+func (d *Decoder) decInstance(typ reflect.Type, cls classDef) (interface{}, error) {
+	var (
+		i int
+		j int
+	)
+
+	if typ.Kind() != reflect.Struct {
+		return nil, newCodecError("wrong type expect Struct but get " + typ.String())
+	}
+	vv := reflect.New(typ)
+	st := reflect.ValueOf(vv.Interface()).Elem()
+	d.appendRefs(vv)
+	for i = 0; i < len(cls.fieldNameList); i++ {
+		fldName := cls.fieldNameList[i]
+		index, err := findField(fldName, typ)
+		if err != nil {
+			// Log.Printf("%s is not found, will ski type ->p %v", fldName, typ)
+			continue
+		}
+		fldValue := st.Field(index)
+		// fmt.Println("fld", fldName, fldValue, fldValue.Kind())
+		if !fldValue.CanSet() {
+			return nil, newCodecError("decInstance CanSet false for " + fldName)
+		}
+
+		kind := fldValue.Kind()
+		// fmt.Println("fld name:", fldName, ", index:", index, ", fld kind:", kind, ", flag:", fldValue.Type(), ", Name:",
+		//	fldValue.Type().Name())
+		switch {
+		case kind == reflect.String:
+			str, err := d.decString(TAG_READ)
+			if err != nil {
+				return nil, newCodecError("decInstance->ReadString:"+fldName, err)
+			}
+			fldValue.SetString(str)
+
+		case kind == reflect.Int32 || kind == reflect.Int16:
+			num, err := d.decInt32(TAG_READ)
+			if err != nil {
+				// java enum
+				if fldValue.Type().Implements(javaEnumType) {
+					d.unreadByte() // enum解析，上面decInt64已经读取一个字节，所以这里需要回退一个字节
+					s, err := d.Decode()
+					if err != nil {
+						return nil, newCodecError("decInstance->decObject:"+fldName, err)
+					}
+					enumValue, _ := s.(JavaEnum)
+					num = int32(enumValue)
+				} else {
+					return nil, newCodecError("decInstance->ParseInt:"+fldName, err)
+				}
+			}
+
+			fldValue.SetInt(int64(num))
+
+		case kind == reflect.Int || kind == reflect.Int64 || kind == reflect.Uint64:
+			num, err := d.decInt64(TAG_READ)
+			if err != nil {
+				if fldValue.Type().Implements(javaEnumType) {
+					d.unreadByte() // enum解析，上面decInt64已经读取一个字节，所以这里需要回退一个字节
+					s, err := d.Decode()
+					if err != nil {
+						return nil, newCodecError("decInstance->decObject:"+fldName, err)
+					}
+					enumValue, _ := s.(JavaEnum)
+					num = int64(enumValue)
+				} else {
+					return nil, newCodecError("decInstance->decInt64:"+fldName, err)
+				}
+			}
+
+			fldValue.SetInt(num)
+
+		case kind == reflect.Bool:
+			b, err := d.Decode()
+			if err != nil {
+				return nil, newCodecError("decInstance->Decode:"+fldName, err)
+			}
+			fldValue.SetBool(b.(bool))
+
+		case kind == reflect.Float32 || kind == reflect.Float64:
+			num, err := d.decDouble(TAG_READ)
+			if err != nil {
+				return nil, newCodecError("decInstance->decDouble"+fldName, err)
+			}
+			fldValue.SetFloat(num.(float64))
+
+		case kind == reflect.Map:
+			d.decMapByValue(fldValue)
+
+		case kind == reflect.Slice || kind == reflect.Array:
+			// m, _ := d.Decode()
+			m, _ := d.decList(TAG_READ)
+			v := reflect.ValueOf(m)
+			if v.Len() > 0 {
+				sl := reflect.MakeSlice(fldValue.Type(), v.Len(), v.Len())
+				for j = 0; j < v.Len(); j++ {
+					sl.Index(j).Set(reflect.ValueOf(v.Index(j).Interface()))
+				}
+				fldValue.Set(sl)
+			}
+
+		case kind == reflect.Struct:
+			var (
+				err error
+				s   interface{}
+			)
+			if fldValue.Type().String() == "time.Time" {
+				s, err = d.decDate(TAG_READ)
+				if err != nil {
+					return nil, newCodecError("decInstance->decDate", err)
+				}
+				fldValue.Set(reflect.ValueOf(s))
+			} else {
+				s, err = d.decObject(TAG_READ)
+				if err != nil {
+					return nil, newCodecError("decInstance->decObject", err)
+				}
+				if s != nil {
+					fldValue.Set(reflect.Indirect(s.(reflect.Value)))
+				}
+			}
+
+		default:
+			return nil, fmt.Errorf("unknown struct member type:%d", kind)
+		}
+	}
+
+	return vv, nil
+}
+
+func (d *Decoder) appendClsDef(cd classDef) {
+	d.clsDefList = append(d.clsDefList, cd)
+}
+
+func (d *Decoder) getStructDefByIndex(idx int) (reflect.Type, classDef, error) {
+	var (
+		ok      bool
+		clsName string
+		cls     classDef
+		s       structInfo
+	)
+
+	if len(d.clsDefList) <= idx || idx < 0 {
+		return nil, cls, fmt.Errorf("illegal class index @idx %d", idx)
+	}
+	cls = d.clsDefList[idx]
+	s, ok = getStructInfo(cls.javaName)
+	if !ok {
+		return nil, cls, fmt.Errorf("can not find go type name %s in registry", clsName)
+	}
+
+	return s.typ, cls, nil
+}
+
+func (d *Decoder) decEnum(javaName string, flag int32) (JavaEnum, error) {
+	var (
+		err       error
+		enumName  string
+		ok        bool
+		info      structInfo
+		enumValue JavaEnum
+	)
+	enumName, err = d.decString(TAG_READ) // java enum class member is "name"
+	if err != nil {
+		return InvalidJavaEnum, errors.Wrapf(err, "decString for decJavaEnum")
+	}
+	info, ok = getStructInfo(javaName)
+	if !ok {
+		return InvalidJavaEnum, fmt.Errorf("getStructInfo(javaName:%s) = false", javaName)
+	}
+
+	enumValue = info.inst.(POJOEnum).EnumValue(enumName)
+	d.appendRefs(enumValue)
+	return enumValue, nil
+}
+
+func (d *Decoder) decObject(flag int32) (interface{}, error) {
+	var (
+		tag byte
+		idx int32
+		err error
+		typ reflect.Type
+		cls classDef
+	)
+
+	if flag != TAG_READ {
+		tag = byte(flag)
+	} else {
+		tag, _ = d.readByte()
+	}
+
+	switch {
+	case tag == BC_OBJECT_DEF:
+		clsDef, err := d.decClassDef()
+		if err != nil {
+			return nil, newCodecError("decObject->decClassDef byte double", err)
+		}
+		cls, _ = clsDef.(classDef)
+		//add to slice
+		d.appendClsDef(cls)
+
+		return d.Decode()
+
+	case tag == BC_OBJECT:
+		idx, err = d.decInt32(TAG_READ)
 		if err != nil {
 			return nil, err
 		}
-		if l != 4 {
-			return nil, ErrNotEnoughBuf
-		}
-		l = int(UnpackInt32(s)) // ref index
 
-		if len(this.refs) <= l {
-			return nil, ErrIllegalRefIndex
+		typ, cls, err = d.getStructDefByIndex(int(idx))
+		if err != nil {
+			return nil, err
 		}
-		return &this.refs[l], nil
+		if typ.Implements(javaEnumType) {
+			return d.decEnum(cls.javaName, TAG_READ)
+		}
+
+		return d.decInstance(typ, cls)
+
+	case (BC_OBJECT_DIRECT <= tag && tag <= (BC_OBJECT_DIRECT+OBJECT_DIRECT_MAX)):
+		typ, cls, err = d.getStructDefByIndex(int(tag - BC_OBJECT_DIRECT))
+		if err != nil {
+			return nil, err
+		}
+		if typ.Implements(javaEnumType) {
+			return d.decEnum(cls.javaName, TAG_READ)
+		}
+
+		return d.decInstance(typ, cls)
 
 	default:
-		return nil, fmt.Errorf("Invalid type: %v,>>%v<<<", string(t), this.peek(this.len()))
+		return nil, newCodecError("decObject illegal object type tag:", tag)
+	}
+}
+
+/////////////////////////////////////////
+// Ref
+/////////////////////////////////////////
+
+// # value reference (e.g. circular trees and graphs)
+// ref        ::= x51 int            # reference to nth map/list/object
+func (d *Decoder) decRef(flag int32) (interface{}, error) {
+	var (
+		err error
+		tag byte
+		i   int32
+	)
+
+	if flag != TAG_READ {
+		tag = byte(flag)
+	} else {
+		tag, _ = d.readByte()
+	}
+
+	switch {
+	case tag == BC_REF:
+		i, err = d.decInt32(TAG_READ)
+		if err != nil {
+			return nil, err
+		}
+
+		if len(d.refs) <= int(i) {
+			return nil, ErrIllegalRefIndex
+		}
+		return &d.refs[i], nil
+
+	default:
+		return nil, newCodecError("decRef illegal ref type tag:", tag)
 	}
 }
