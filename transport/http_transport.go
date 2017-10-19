@@ -21,13 +21,15 @@ import (
 	log "github.com/AlexStocks/log4go"
 )
 
+import (
+	"github.com/AlexStocks/dubbogo/common"
+)
+
 const (
-	PathPrefix                byte = byte('/')
-	DefaultMaxSleepTime            = 1 * time.Second  // accept中间最大sleep interval
-	DefaultMAXConnNum              = 50 * 1024 * 1024 // 默认最大连接数 50w
-	DefaultHTTPRspBufferSize       = 1024
-	DefaultTcpReadBufferSize       = 128 * 1024 // 64k
-	DefaultTcpWriteBufferSize      = 512 * 1024 // 64k
+	DefaultMaxSleepTime           = 1 * time.Second  // accept中间最大sleep interval
+	DefaultMAXConnNum             = 50 * 1024 * 1024 // 默认最大连接数 50w
+	DefaultHTTPRspBufferSize      = 1024
+	PathPrefix               byte = byte('/')
 )
 
 type buffer struct {
@@ -109,15 +111,16 @@ func (h *httpTransportClient) Send(m *Message) error {
 	}
 	h.Unlock()
 
-	// set timeout if its greater than 0
+	// set timeout if h.ht.opts.Timeout greater than 0
 	if h.ht.opts.Timeout > time.Duration(0) {
-		h.conn.SetWriteDeadline(time.Now().Add(h.ht.opts.Timeout))
+		common.SetNetConnTimeout(h.conn, h.ht.opts.Timeout)
+		defer common.SetNetConnTimeout(h.conn, 0)
 	}
 
-	err := req.Write(h.conn)
-
-	if h.ht.opts.Timeout > time.Duration(0) {
-		h.conn.SetWriteDeadline(time.Time{}) // learn from samuel/go-zookeeper
+	reqBuf := bytes.NewBuffer(make([]byte, 0))
+	err := req.Write(reqBuf)
+	if err == nil {
+		_, err = reqBuf.WriteTo(h.conn)
 	}
 
 	return err
@@ -141,22 +144,17 @@ func (h *httpTransportClient) Recv(m *Message) error {
 
 	// set timeout if its greater than 0
 	if h.ht.opts.Timeout > time.Duration(0) {
-		h.conn.SetReadDeadline(time.Now().Add(h.ht.opts.Timeout))
+		common.SetNetConnTimeout(h.conn, h.ht.opts.Timeout)
+		defer common.SetNetConnTimeout(h.conn, 0)
 	}
 
 	rsp, err := http.ReadResponse(h.buff, r)
 	if err != nil {
-		if h.ht.opts.Timeout > time.Duration(0) {
-			h.conn.SetReadDeadline(time.Time{}) // refer to samuel/go-zookeeper
-		}
 		return err
 	}
 	defer rsp.Body.Close() // 这句话如果不调用，连接在调用(httpTransportClient)Close之前就不释放
 
 	b, err := ioutil.ReadAll(rsp.Body)
-	if h.ht.opts.Timeout > time.Duration(0) {
-		h.conn.SetReadDeadline(time.Time{}) // refer to samuel/go-zookeeper
-	}
 	if err != nil {
 		return err
 	}
@@ -183,7 +181,6 @@ func (h *httpTransportClient) Recv(m *Message) error {
 }
 
 func (h *httpTransportClient) Close() error {
-	// log.Debug("close transport client{%#v}", h)
 	var err error
 	h.once.Do(func() {
 		h.Lock()
@@ -242,21 +239,16 @@ func (h *httpTransportSocket) Recv(m *Message) error {
 
 	// set timeout if its greater than 0
 	if h.ht.opts.Timeout > time.Duration(0) {
-		h.conn.SetReadDeadline(time.Now().Add(h.ht.opts.Timeout))
+		common.SetNetConnTimeout(h.conn, h.ht.opts.Timeout)
+		defer common.SetNetConnTimeout(h.conn, 0)
 	}
 
 	r, err := http.ReadRequest(h.bufReader)
 	if err != nil {
-		if h.ht.opts.Timeout > time.Duration(0) {
-			h.conn.SetReadDeadline(time.Time{}) // refer to samuel/go-zookeeper
-		}
 		return err
 	}
 
 	b, err := ioutil.ReadAll(r.Body)
-	if h.ht.opts.Timeout > time.Duration(0) {
-		h.conn.SetReadDeadline(time.Time{}) // refer to samuel/go-zookeeper
-	}
 	if err != nil {
 		return err
 	}
@@ -327,15 +319,11 @@ func (h *httpTransportSocket) Send(m *Message) error {
 
 	// set timeout if its greater than 0
 	if h.ht.opts.Timeout > time.Duration(0) {
-		h.conn.SetWriteDeadline(time.Now().Add(h.ht.opts.Timeout))
+		common.SetNetConnTimeout(h.conn, h.ht.opts.Timeout)
+		defer common.SetNetConnTimeout(h.conn, 0)
 	}
 
 	_, err = h.rspBuf.WriteTo(h.conn)
-
-	// set timeout if its greater than 0
-	if h.ht.opts.Timeout > time.Duration(0) {
-		h.conn.SetWriteDeadline(time.Time{}) // refer to samuel/go-zookeeper
-	}
 
 	return err
 }
@@ -437,12 +425,11 @@ func (h *httpTransportListener) Accept(fn func(Socket)) error {
 		if err != nil {
 			h.release()
 			if ne, ok = err.(net.Error); ok && ne.Temporary() {
-				if tmpDelay == 0 {
-					tmpDelay = 5 * time.Millisecond
+				if tmpDelay != 0 {
+					tmpDelay <<= 1
 				} else {
-					tmpDelay *= 2
+					tmpDelay = 5 * time.Millisecond
 				}
-				// if max := 1 * time.Second; tempDelay > max {
 				if tmpDelay > DefaultMaxSleepTime {
 					tmpDelay = DefaultMaxSleepTime
 				}
@@ -452,15 +439,11 @@ func (h *httpTransportListener) Accept(fn func(Socket)) error {
 			}
 			return err
 		}
-		// if tcpConn, ok = c.(net.TCPConn); ok {
-		// 	// tcpConn.SetReadBuffer(DefaultTcpReadBufferSize) // use the os default value
-		// 	// tcpConn.SetWriteBuffer(DefaultTcpReadBufferSize) // use the os default value
-		// }
 
 		sock := initHttpTransportSocket(h.ht, c, h.release)
 
 		// 逻辑执行再单独启动一个goroutine
-		go func() {
+		common.GoroutinePool.Go(func() {
 			defer func() {
 				if r := recover(); r != nil {
 					const size = 64 << 10
@@ -472,7 +455,7 @@ func (h *httpTransportListener) Accept(fn func(Socket)) error {
 			}()
 
 			fn(sock) // rpcServer:handlePkg 函数里面有一个defer语句段，保证了正常退出的情况下sock.Close()
-		}()
+		})
 	}
 }
 
@@ -493,11 +476,7 @@ func (h *httpTransport) Dial(addr string, opts ...DialOption) (Client, error) {
 		opt(&dopts)
 	}
 
-	var (
-		conn net.Conn
-		err  error
-	)
-	conn, err = net.DialTimeout("tcp", addr, dopts.Timeout)
+	conn, err := net.DialTimeout("tcp", addr, dopts.Timeout)
 	if err != nil {
 		return nil, err
 	}
@@ -514,8 +493,6 @@ func listen(addr string, fn func(string) (net.Listener, error)) (net.Listener, e
 
 	// host:port || host:min-max
 	parts := strings.Split(addr, ":")
-
-	//
 	if len(parts) < 2 {
 		return fn(addr)
 	}
@@ -561,7 +538,6 @@ func listen(addr string, fn func(string) (net.Listener, error)) (net.Listener, e
 		}
 	}
 
-	// why are we here?
 	// 仅仅是为了满足编译器检查错误需求(所有分支都有返回)
 	return nil, fmt.Errorf("unable to bind to %s", addr)
 }
@@ -572,17 +548,10 @@ func (h *httpTransport) Listen(addr string, opts ...ListenOption) (Listener, err
 		o(&options)
 	}
 
-	var (
-		l   net.Listener
-		err error
-	)
-
 	fn := func(addr string) (net.Listener, error) {
 		return net.Listen("tcp", addr)
 	}
-
-	l, err = listen(addr, fn)
-
+	l, err := listen(addr, fn)
 	if err != nil {
 		return nil, err
 	}
@@ -600,8 +569,4 @@ func newHTTPTransport(opts ...Option) *httpTransport {
 		o(&options)
 	}
 	return &httpTransport{opts: options}
-}
-
-func NewHTTPTransport(opts ...Option) Transport {
-	return newHTTPTransport(opts...)
 }

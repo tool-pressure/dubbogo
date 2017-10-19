@@ -3,6 +3,7 @@ package common
 import (
 	"fmt"
 	"net"
+	"time"
 )
 
 var (
@@ -73,4 +74,14 @@ func isPrivateIP(ipAddr string) bool {
 		}
 	}
 	return false
+}
+
+// refer to samuel/go-zookeeper
+func SetNetConnTimeout(conn net.Conn, timeout time.Duration) {
+	t := time.Time{}
+	if timeout > time.Duration(0) {
+		t = time.Now().Add(timeout)
+	}
+
+	conn.SetReadDeadline(t)
 }

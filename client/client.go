@@ -13,7 +13,6 @@ package client
 import (
 	"context"
 	"time"
-	// "golang.org/x/net/context"
 )
 
 // Client is the interface used to make requests to services.

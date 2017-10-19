@@ -11,9 +11,8 @@ type Message struct {
 }
 
 func (this *Message) Reset() {
-	var key string
 	this.Body = this.Body[:0]
-	for key = range this.Header {
+	for key := range this.Header {
 		delete(this.Header, key)
 	}
 }
@@ -57,3 +56,19 @@ type ListenOption func(*ListenOptions)
 var (
 	DefaultDialTimeout = time.Second * 5
 )
+
+// just leave here to compatible with v0.1
+func NewHTTPTransport(opts ...Option) Transport {
+	return newHTTPTransport(opts...)
+}
+
+func NewTransport(t Type, opts ...Option) Transport {
+	switch t {
+	case TCP:
+		return newTcpTransport(opts...)
+	case HTTP:
+		return newHTTPTransport(opts...)
+	}
+
+	return nil
+}

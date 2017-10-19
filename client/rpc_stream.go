@@ -15,7 +15,6 @@ import (
 	"errors"
 	"io"
 	"sync"
-	// "golang.org/x/net/context"
 )
 
 import (
@@ -26,7 +25,7 @@ import (
 type rpcStream struct {
 	sync.RWMutex
 	seq     int64
-	closed  chan bool
+	closed  chan struct{}
 	err     error
 	request Request
 	codec   clientCodec

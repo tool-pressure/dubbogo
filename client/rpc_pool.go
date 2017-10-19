@@ -20,26 +20,10 @@ import (
 	"github.com/AlexStocks/dubbogo/transport"
 )
 
-type pool struct {
-	size int   // 从line 92可见，size是[]*poolConn数组的size
-	ttl  int64 // 从line 61 可见，ttl是每个poolConn的有效期时间. pool对象会在getConn时执行ttl检查
-
-	sync.Mutex
-	conns map[string][]*poolConn // 从[]*poolConn 可见key是连接地址，而value是对应这个地址的连接数组
-}
-
 type poolConn struct {
 	once *sync.Once
 	transport.Client
 	created int64 // 为0，则说明没有被创建或者被销毁了
-}
-
-func newPool(size int, ttl time.Duration) *pool {
-	return &pool{
-		size:  size,
-		ttl:   int64(ttl.Seconds()),
-		conns: make(map[string][]*poolConn),
-	}
 }
 
 func (p *poolConn) Close() error {
@@ -51,6 +35,22 @@ func (p *poolConn) Close() error {
 		err = nil
 	})
 	return err
+}
+
+type pool struct {
+	size int   // 从line 92可见，size是[]*poolConn数组的size
+	ttl  int64 // 从line 61 可见，ttl是每个poolConn的有效期时间. pool对象会在getConn时执行ttl检查
+
+	sync.Mutex
+	conns map[string][]*poolConn // 从[]*poolConn 可见key是连接地址，而value是对应这个地址的连接数组
+}
+
+func newPool(size int, ttl time.Duration) *pool {
+	return &pool{
+		size:  size,
+		ttl:   int64(ttl.Seconds()),
+		conns: make(map[string][]*poolConn),
+	}
 }
 
 func (p *pool) getConn(addr string, tr transport.Transport, opts ...transport.DialOption) (*poolConn, error) {

@@ -3,7 +3,6 @@ package jsonrpc
 import (
 	"encoding/json"
 	"errors"
-	// "fmt"
 	"io"
 	"sync"
 )

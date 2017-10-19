@@ -8,6 +8,7 @@ const (
 	Error MessageType = iota
 	Request
 	Response
+	Heartbeat
 )
 
 type MessageType int

@@ -20,7 +20,7 @@ func (e *Error) Error() string {
 	return string(b)
 }
 
-func New(id, detail string, code int32) error {
+func NewError(id, detail string, code int32) error {
 	return &Error{
 		Id:     id,
 		Code:   code,

@@ -2,6 +2,7 @@ package jsonrpc
 
 import (
 	"encoding/json"
+	"fmt"
 	"io"
 	"reflect"
 	"sync"
@@ -9,16 +10,15 @@ import (
 
 import (
 	log "github.com/AlexStocks/log4go"
-	// "github.com/gorilla/rpc/v2/json2"
 )
 
 import (
-	"fmt"
 	"github.com/AlexStocks/dubbogo/codec"
 )
 
 const (
 	MAX_JSONRPC_ID = 0x7FFFFFFF
+	VERSION        = "2.0"
 )
 
 type clientCodec struct {
@@ -34,24 +34,12 @@ type clientCodec struct {
 	pending map[int64]string
 }
 
-// type clientRequest struct {
-// 	Method string         `json:"method"`
-// 	Params [1]interface{} `json:"params"`
-// 	ID     uint64         `json:"id"`
-// }
-
 type clientRequest struct {
 	Version string      `json:"jsonrpc"`
 	Method  string      `json:"method"`
 	Params  interface{} `json:"params"`
 	ID      int64       `json:"id"`
 }
-
-// type clientResponse struct {
-// 	ID     uint64           `json:"id"`
-// 	Result *json.RawMessage `json:"result"`
-// 	Error  interface{}      `json:"error"`
-// }
 
 type clientResponse struct {
 	Version string           `json:"jsonrpc"`
@@ -115,7 +103,7 @@ func (c *clientCodec) Write(m *codec.Message, param interface{}) error {
 		}
 	}
 
-	c.req.Version = "2.0"
+	c.req.Version = VERSION
 	c.req.Method = m.Method
 	// c.req.Params = b
 	c.req.Params = param

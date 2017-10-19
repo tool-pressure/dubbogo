@@ -12,7 +12,6 @@ package client
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"strconv"
 	"sync"
@@ -59,8 +58,7 @@ func newRPCClient(opt ...Option) Client {
 
 	t := time.Now()
 	rc := &rpcClient{
-		ID: int64(uint32(t.Second() * t.Nanosecond() * common.Goid())),
-		// once: sync.Once{},
+		ID:   int64(uint32(t.Second() * t.Nanosecond() * common.Goid())),
 		opts: opts,
 		pool: newPool(opts.PoolSize, opts.PoolTTL),
 		done: make(chan empty),
@@ -76,19 +74,19 @@ func newRPCClient(opt ...Option) Client {
 }
 
 // rpcClient garbage collector
-func (this *rpcClient) gc() {
+func (c *rpcClient) gc() {
 	var (
 		obj interface{}
 	)
 
-	defer this.wg.Done()
+	defer c.wg.Done()
 LOOP:
 	for {
 		select {
-		case <-this.done:
+		case <-c.done:
 			log.Info("(rpcClient)gc goroutine exit now ...")
 			break LOOP
-		case obj = <-this.gcCh:
+		case obj = <-c.gcCh:
 			switch obj.(type) {
 			case *rpcStream:
 				obj.(*rpcStream).Close() // stream.Close()->rpcPlusCodec.Close->poolConn.Close->httpTransportClient.Close
@@ -97,8 +95,8 @@ LOOP:
 	}
 }
 
-func (this *rpcClient) newCodec(contentType string) (codec.NewCodec, error) {
-	if c, ok := this.opts.Codecs[contentType]; ok {
+func (c *rpcClient) newCodec(contentType string) (codec.NewCodec, error) {
+	if c, ok := c.opts.Codecs[contentType]; ok {
 		return c, nil
 	}
 
@@ -118,7 +116,7 @@ func (this *rpcClient) newCodec(contentType string) (codec.NewCodec, error) {
 // 6 启动一个收发goroutine, 调用stream完成网络收发;
 // 7 通过一个error channel等待收发goroutine结束流程。
 // rpc client -> rpc stream -> rpc codec -> codec + transport
-func (this *rpcClient) call(reqID int64, ctx context.Context, address string, path string, req Request, rsp interface{}, opts CallOptions) error {
+func (c *rpcClient) call(reqID int64, ctx context.Context, address string, path string, req Request, rsp interface{}, opts CallOptions) error {
 	// 创建msg
 	msg := &transport.Message{
 		Header: make(map[string]string),
@@ -126,8 +124,8 @@ func (this *rpcClient) call(reqID int64, ctx context.Context, address string, pa
 
 	md, ok := ctx.Value(common.DUBBOGO_CTX_KEY).(map[string]string)
 	if ok {
-		for k, v := range md {
-			msg.Header[k] = v
+		for k := range md {
+			msg.Header[k] = md[k]
 		}
 	}
 
@@ -139,14 +137,14 @@ func (this *rpcClient) call(reqID int64, ctx context.Context, address string, pa
 	msg.Header["Accept"] = req.ContentType()
 
 	// 创建codec
-	cf, err := this.newCodec(req.ContentType())
+	cf, err := c.newCodec(req.ContentType())
 	if err != nil {
 		return common.InternalServerError("dubbogo.client", err.Error())
 	}
 
 	// 从连接池获取连接对象
-	var grr error
-	c, err := this.pool.getConn(address, this.opts.Transport, transport.WithTimeout(opts.DialTimeout), transport.WithPath(path))
+	var gerr error
+	conn, err := c.pool.getConn(address, c.opts.Transport, transport.WithTimeout(opts.DialTimeout), transport.WithPath(path))
 	if err != nil {
 		return common.InternalServerError("dubbogo.client", fmt.Sprintf("Error sending request: %v", err))
 	}
@@ -156,30 +154,29 @@ func (this *rpcClient) call(reqID int64, ctx context.Context, address string, pa
 		seq:     reqID,
 		context: ctx,
 		request: req,
-		closed:  make(chan bool),
+		closed:  make(chan struct{}),
 		// !!!!! 这个codec是rpc_codec,其主要成员是发送内容msg，网络层(transport)对象c，codec对象cf
 		// 这行代码把github.com/AlexStocks/dubbogo/codec dubbo/client github.com/AlexStocks/dubbogo/transport连接了起来
 		// newRpcPlusCodec(*transport.Message, transport.Client, codec.Codec)
-		codec: newRpcPlusCodec(msg, c, cf),
+		codec: newRpcPlusCodec(msg, conn, cf),
 	}
 	defer func() {
 		log.Debug("check request{%#v}, stream condition before store the conn object into pool", req)
 		// defer execution of release
 		if req.Stream() {
 			// 只缓存长连接
-			this.pool.release(address, c, grr)
+			c.pool.release(address, conn, gerr)
 		}
 		// 下面这个分支与(rpcStream)Close, 2016/08/07
 		// else {
 		// 	log.Debug("close pool connection{%#v}", c)
 		// 	c.Close() // poolConn.Close->httpTransportClient.Close
 		// }
-		this.gcCh <- stream
+		c.gcCh <- stream
 	}()
 
 	ch := make(chan error, 1)
-
-	go func() {
+	common.GoroutinePool.Go(func() {
 		var (
 			err error
 		)
@@ -202,7 +199,7 @@ func (this *rpcClient) call(reqID int64, ctx context.Context, address string, pa
 			return
 		}
 
-		// recv request
+		// recv response
 		// 1 stream.Recv 调用rpcPlusCodec.ReadResponseHeader & rpcPlusCodec.ReadResponseBody;
 		// 2 rpcPlusCodec.ReadResponseHeader 先调用httpTransportClient.read，然后再调用codec.ReadHeader
 		// 3 rpcPlusCodec.ReadResponseBody 调用codec.ReadBody
@@ -214,187 +211,16 @@ func (this *rpcClient) call(reqID int64, ctx context.Context, address string, pa
 
 		// success
 		ch <- nil
-	}()
+	})
 
 	select {
 	case err := <-ch:
-		grr = err
+		gerr = err
 		return err
 	case <-ctx.Done():
-		grr = ctx.Err()
-		return common.New("dubbogo.client", fmt.Sprintf("%v", ctx.Err()), 408)
+		gerr = ctx.Err()
+		return common.NewError("dubbogo.client", fmt.Sprintf("%v", ctx.Err()), 408)
 	}
-}
-
-func (r *rpcClient) stream(ctx context.Context, address string, req Request, opts CallOptions) (Streamer, error) {
-	msg := &transport.Message{
-		Header: make(map[string]string),
-	}
-
-	md, ok := metadata.FromContext(ctx)
-	if ok {
-		for k, v := range md {
-			msg.Header[k] = v
-		}
-	}
-
-	// set timeout in nanoseconds
-	msg.Header["Timeout"] = fmt.Sprintf("%d", opts.RequestTimeout)
-	// set the content type for the request
-	msg.Header["Content-Type"] = req.ContentType()
-	// set the accept header
-	msg.Header["Accept"] = req.ContentType()
-
-	cf, err := r.newCodec(req.ContentType())
-	if err != nil {
-		return nil, errors.InternalServerError("go.micro.client", err.Error())
-	}
-
-	c, err := r.opts.Transport.Dial(address, transport.WithStream(), transport.WithTimeout(opts.DialTimeout))
-	if err != nil {
-		return nil, errors.InternalServerError("go.micro.client", fmt.Sprintf("Error sending request: %v", err))
-	}
-
-	stream := &rpcStream{
-		context: ctx,
-		request: req,
-		closed:  make(chan bool),
-		codec:   newRpcPlusCodec(msg, c, cf),
-	}
-
-	ch := make(chan error, 1)
-
-	go func() {
-		ch <- stream.Send(req.Request())
-	}()
-
-	var grr error
-
-	select {
-	case err := <-ch:
-		grr = err
-	case <-ctx.Done():
-		grr = errors.New("go.micro.client", fmt.Sprintf("%v", ctx.Err()), 408)
-	}
-
-	if grr != nil {
-		stream.Close()
-		return nil, grr
-	}
-
-	return stream, nil
-}
-
-func (r *rpcClient) Stream(ctx context.Context, request Request, opts ...CallOption) (Streamer, error) {
-	// make a copy of call opts
-	callOpts := r.opts.CallOptions
-	for _, opt := range opts {
-		opt(&callOpts)
-	}
-
-	// get next nodes from the selector
-	next, err := r.opts.Selector.Select(request.Service(), callOpts.SelectOptions...)
-	if err != nil && err == selector.ErrNotFound {
-		return nil, errors.NotFound("go.micro.client", err.Error())
-	} else if err != nil {
-		return nil, errors.InternalServerError("go.micro.client", err.Error())
-	}
-
-	// check if we already have a deadline
-	d, ok := ctx.Deadline()
-	if !ok {
-		// no deadline so we create a new one
-		ctx, _ = context.WithTimeout(ctx, callOpts.RequestTimeout)
-	} else {
-		// got a deadline so no need to setup context
-		// but we need to set the timeout we pass along
-		opt := WithRequestTimeout(d.Sub(time.Now()))
-		opt(&callOpts)
-	}
-
-	// should we noop right here?
-	select {
-	case <-ctx.Done():
-		return nil, errors.New("go.micro.client", fmt.Sprintf("%v", ctx.Err()), 408)
-	default:
-	}
-
-	call := func(i int) (Streamer, error) {
-		// call backoff first. Someone may want an initial start delay
-		t, err := callOpts.Backoff(ctx, request, i)
-		if err != nil {
-			return nil, errors.InternalServerError("go.micro.client", err.Error())
-		}
-
-		// only sleep if greater than 0
-		if t.Seconds() > 0 {
-			time.Sleep(t)
-		}
-
-		node, err := next()
-		if err != nil && err == selector.ErrNotFound {
-			return nil, errors.NotFound("go.micro.client", err.Error())
-		} else if err != nil {
-			return nil, errors.InternalServerError("go.micro.client", err.Error())
-		}
-
-		address := node.Address
-		if node.Port > 0 {
-			address = fmt.Sprintf("%s:%d", address, node.Port)
-		}
-
-		stream, err := r.stream(ctx, address, request, callOpts)
-		r.opts.Selector.Mark(request.Service(), node, err)
-		return stream, err
-	}
-
-	type response struct {
-		stream Streamer
-		err    error
-	}
-
-	ch := make(chan response, callOpts.Retries)
-	var grr error
-
-	for i := 0; i < callOpts.Retries; i++ {
-		go func() {
-			s, err := call(i)
-			ch <- response{s, err}
-		}()
-
-		select {
-		case <-ctx.Done():
-			return nil, errors.New("go.micro.client", fmt.Sprintf("%v", ctx.Err()), 408)
-		case rsp := <-ch:
-			// if the call succeeded lets bail early
-			if rsp.err == nil {
-				return rsp.stream, nil
-			}
-			grr = rsp.err
-		}
-	}
-
-	return nil, grr
-}
-
-func (this *rpcClient) Init(opts ...Option) error {
-	size := this.opts.PoolSize
-	ttl := this.opts.PoolTTL
-
-	for _, o := range opts {
-		o(&this.opts)
-	}
-
-	// recreate the pool if the options changed
-	if size != this.opts.PoolSize || ttl != this.opts.PoolTTL {
-		this.pool = newPool(this.opts.PoolSize, this.opts.PoolTTL)
-	}
-
-	return nil
-}
-
-func (this *rpcClient) Options() Options {
-	return this.opts
 }
 
 // 流程
@@ -403,21 +229,22 @@ func (this *rpcClient) Options() Options {
 //   2.1 调用next函数返回provider的serviceurl;
 //   2.2 调用rpcClient.call()
 // 3 根据重试次数的设定，循环调用call，直到有一次成功或者重试
-func (this *rpcClient) Call(ctx context.Context, request Request, response interface{}, opts ...CallOption) error {
-	reqID := atomic.AddInt64(&this.ID, 1)
+func (c *rpcClient) Call(ctx context.Context, request Request, response interface{}, opts ...CallOption) error {
+	reqID := atomic.AddInt64(&c.ID, 1)
 	// make a copy of call opts
-	callOpts := this.opts.CallOptions
+	callOpts := c.opts.CallOptions
 	for _, opt := range opts {
 		opt(&callOpts)
 	}
 
 	// get next nodes from the selector
-	next, err := this.opts.Selector.Select(request.Service())
-	if err != nil && err == selector.ErrNotFound {
+	next, err := c.opts.Selector.Select(request.Service())
+	if err != nil {
 		log.Error("selector.Select(request{%#v}) = error{%#v}", request, err)
-		return common.NotFound("dubbogo.client", err.Error())
-	} else if err != nil {
-		log.Error("selector.Select(request{%#v}) = error{%#v}", request, err)
+		if err == selector.ErrNotFound {
+			return common.NotFound("dubbogo.client", err.Error())
+		}
+
 		return common.InternalServerError("dubbogo.client", err.Error())
 	}
 
@@ -433,10 +260,9 @@ func (this *rpcClient) Call(ctx context.Context, request Request, response inter
 		opt(&callOpts)
 	}
 
-	// should we noop right here?
 	select {
 	case <-ctx.Done():
-		return common.New("dubbogo.client", fmt.Sprintf("%v", ctx.Err()), 408)
+		return common.NewError("dubbogo.client", fmt.Sprintf("%v", ctx.Err()), 408)
 	default:
 	}
 
@@ -444,21 +270,22 @@ func (this *rpcClient) Call(ctx context.Context, request Request, response inter
 	call := func(i int) error {
 		// select next node
 		serviceURL, err := next(reqID)
-		if err != nil && err == selector.ErrNotFound {
+		if err != nil {
 			log.Error("selector.next(request{%#v}, reqID{%d}) = error{%#v}", request, reqID, err)
-			return common.NotFound("dubbogo.client", err.Error())
-		} else if err != nil {
-			log.Error("selector.next(request{%#v}, reqID{%d}) = error{%#v}", request, reqID, err)
+			if err == selector.ErrNotFound {
+				return common.NotFound("dubbogo.client", err.Error())
+			}
+
 			return common.InternalServerError("dubbogo.client", err.Error())
 		}
 
 		// set the address
 		address := serviceURL.Location //  + serviceURL.Path
 		// make the call
-		err = this.call(reqID, ctx, address, serviceURL.Path, request, response, callOpts)
+		err = c.call(reqID, ctx, address, serviceURL.Path, request, response, callOpts)
 		log.Debug("@i{%d}, call(ID{%v}, ctx{%v}, address{%v}, path{%v}, request{%v}, response{%v}) = err{%v}",
 			i, reqID, ctx, address, serviceURL.Path, request, response, err)
-		this.opts.Selector.Mark(request.Service(), serviceURL, err)
+		c.opts.Selector.Mark(request.Service(), serviceURL, err)
 		return err
 	}
 
@@ -468,14 +295,15 @@ func (this *rpcClient) Call(ctx context.Context, request Request, response inter
 	)
 	ch = make(chan error, callOpts.Retries)
 	for i := 0; i < callOpts.Retries; i++ {
-		go func(index int) {
+		var index = i
+		common.GoroutinePool.Go(func() {
 			ch <- call(index)
-		}(i)
+		})
 
 		select {
 		case <-ctx.Done():
 			log.Error("reqID{%d}, @i{%d}, ctx.Done()", reqID, i)
-			return common.New("dubbogo.client", fmt.Sprintf("%v", ctx.Err()), 408)
+			return common.NewError("dubbogo.client", fmt.Sprintf("%v", ctx.Err()), 408)
 		case err := <-ch:
 			// if the call succeeded lets bail early
 			if err == nil || len(err.Error()) == 0 {
@@ -489,25 +317,211 @@ func (this *rpcClient) Call(ctx context.Context, request Request, response inter
 	return gerr
 }
 
-func (this *rpcClient) NewJsonRequest(service string, method string, request interface{}, reqOpts ...RequestOption) Request {
+func (c *rpcClient) stream(reqID int64, ctx context.Context, address string, path string, req Request, opts CallOptions) (Streamer, error) {
+	msg := &transport.Message{
+		Header: make(map[string]string),
+	}
+
+	md, ok := ctx.Value(common.DUBBOGO_CTX_KEY).(map[string]string)
+	if ok {
+		for k, v := range md {
+			msg.Header[k] = v
+		}
+	}
+
+	// set timeout in nanoseconds
+	msg.Header["Timeout"] = fmt.Sprintf("%d", opts.RequestTimeout)
+	// set the content type for the request
+	msg.Header["Content-Type"] = req.ContentType()
+	// set the accept header
+	msg.Header["Accept"] = req.ContentType()
+
+	cf, err := c.newCodec(req.ContentType())
+	if err != nil {
+		return nil, common.InternalServerError("dubbogo.client", err.Error())
+	}
+
+	// 从连接池获取连接对象
+	var gerr error
+	conn, err := c.pool.getConn(address, c.opts.Transport, transport.WithStream(), transport.WithTimeout(opts.DialTimeout), transport.WithPath(path))
+	if err != nil {
+		return nil, common.InternalServerError("dubbogo.client", fmt.Sprintf("Error sending request: %v", err))
+	}
+
+	// 网络层请求
+	stream := &rpcStream{
+		seq:     reqID,
+		context: ctx,
+		request: req,
+		closed:  make(chan struct{}),
+		codec:   newRpcPlusCodec(msg, conn, cf),
+	}
+	defer func() {
+		log.Debug("check request{%#v}, stream condition before store the conn object into pool", req)
+		// defer execution of release
+		if req.Stream() {
+			// 只缓存长连接
+			c.pool.release(address, conn, gerr)
+		}
+		// 下面这个分支与(rpcStream)Close, 2016/08/07
+		// else {
+		// 	log.Debug("close pool connection{%#v}", c)
+		// 	c.Close() // poolConn.Close->httpTransportClient.Close
+		// }
+		c.gcCh <- stream
+	}()
+	ch := make(chan error, 1)
+	common.GoroutinePool.Go(func() {
+		ch <- stream.Send(req.Request())
+	})
+
+	select {
+	case err := <-ch:
+		gerr = err
+		return stream, err
+	case <-ctx.Done():
+		gerr = ctx.Err()
+		return stream, common.NewError("dubbogo.client", fmt.Sprintf("%v", ctx.Err()), 408)
+	}
+}
+
+func (c *rpcClient) Stream(ctx context.Context, request Request, opts ...CallOption) (Streamer, error) {
+	reqID := atomic.AddInt64(&c.ID, 1)
+	// make a copy of call opts
+	callOpts := c.opts.CallOptions
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
+	// get next nodes from the selector
+	next, err := c.opts.Selector.Select(request.Service())
+	if err != nil {
+		log.Error("selector.Select(request{%#v}) = error{%#v}", request, err)
+		if err == selector.ErrNotFound {
+			return nil, common.NotFound("dubbogo.client", err.Error())
+		}
+
+		return nil, common.InternalServerError("go.micro.client", err.Error())
+	}
+
+	// check if we already have a deadline
+	d, ok := ctx.Deadline()
+	if !ok {
+		// no deadline so we create a new one
+		ctx, _ = context.WithTimeout(ctx, callOpts.RequestTimeout)
+	} else {
+		// got a deadline so no need to setup context
+		// but we need to set the timeout we pass along
+		opt := WithRequestTimeout(d.Sub(time.Now()))
+		opt(&callOpts)
+	}
+
+	select {
+	case <-ctx.Done():
+		return nil, common.NewError("go.micro.client", fmt.Sprintf("%v", ctx.Err()), 408)
+	default:
+	}
+
+	call := func(i int) (Streamer, error) {
+		// stream, err := c.stream(ctx, address, request, callOpts)
+		// c.opts.Selector.Mark(request.Service(), node, err)
+		// return stream, err
+
+		// select next node
+		serviceURL, err := next(reqID)
+		if err != nil {
+			log.Error("selector.next(request{%#v}, reqID{%d}) = error{%#v}", request, reqID, err)
+			if err == selector.ErrNotFound {
+				return nil, common.NotFound("dubbogo.client", err.Error())
+			}
+
+			return nil, common.InternalServerError("dubbogo.client", err.Error())
+		}
+
+		// set the address
+		address := serviceURL.Location //  + serviceURL.Path
+		// make the call
+		stream, err := c.stream(reqID, ctx, address, serviceURL.Path, request, callOpts)
+		log.Debug("@i{%d}, call(ID{%v}, ctx{%v}, address{%v}, path{%v}, request{%v}) = err{%v}",
+			i, reqID, ctx, address, serviceURL.Path, request, err)
+		c.opts.Selector.Mark(request.Service(), serviceURL, err)
+
+		return stream, err
+	}
+
+	type response struct {
+		stream Streamer
+		err    error
+	}
+
+	var (
+		gerr error
+		ch   chan response
+	)
+	ch = make(chan response, callOpts.Retries)
+	for i := 0; i < callOpts.Retries; i++ {
+		var index = i
+		common.GoroutinePool.Go(func() {
+			s, err := call(index)
+			ch <- response{s, err}
+		})
+
+		select {
+		case <-ctx.Done():
+			log.Error("reqID{%d}, @i{%d}, ctx.Done()", reqID, i)
+			return nil, common.NewError("dubbogo.client", fmt.Sprintf("%v", ctx.Err()), 408)
+		case rsp := <-ch:
+			// if the call succeeded lets bail early
+			if rsp.err == nil || len(rsp.err.Error()) == 0 {
+				return rsp.stream, nil
+			}
+			log.Error("reqID{%d}, @i{%d}, err{%T-%v}", reqID, i, err, err)
+			gerr = rsp.err
+		}
+	}
+
+	return nil, gerr
+}
+
+func (c *rpcClient) Init(opts ...Option) error {
+	size := c.opts.PoolSize
+	ttl := c.opts.PoolTTL
+
+	for _, o := range opts {
+		o(&c.opts)
+	}
+
+	// recreate the pool if the options changed
+	if size != c.opts.PoolSize || ttl != c.opts.PoolTTL {
+		c.pool = newPool(c.opts.PoolSize, c.opts.PoolTTL)
+	}
+
+	return nil
+}
+
+func (c *rpcClient) Options() Options {
+	return c.opts
+}
+
+func (c *rpcClient) NewJsonRequest(service string, method string, request interface{}, reqOpts ...RequestOption) Request {
 	return newRpcRequest(service, method, request, "application/json", reqOpts...)
 }
 
-func (this *rpcClient) String() string {
+func (c *rpcClient) String() string {
 	return "dubbogo rpc client"
 }
 
-func (this *rpcClient) Close() {
-	close(this.done)
-	this.wg.Wait()
-	this.once.Do(func() {
-		if this.opts.Selector != nil {
-			this.opts.Selector.Close()
-			this.opts.Selector = nil
+func (c *rpcClient) Close() {
+	close(c.done)
+	c.wg.Wait()
+	c.once.Do(func() {
+		if c.opts.Selector != nil {
+			c.opts.Selector.Close()
+			c.opts.Selector = nil
 		}
-		if this.opts.Registry != nil {
-			this.opts.Registry.Close()
-			this.opts.Registry = nil
+		if c.opts.Registry != nil {
+			c.opts.Registry.Close()
+			c.opts.Registry = nil
 		}
 	})
 }

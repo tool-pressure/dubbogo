@@ -1,6 +1,6 @@
 /******************************************************
 # DESC    : provide interface for rpc_steam;
-#			encode app packet into byte stream by codec and send them to server by transport,
+#           encode app packet into byte stream by codec and send them to server by transport,
 #           and then receive rsp stream and decode them into app package
 # AUTHOR  : Alex Stocks
 # VERSION : 1.0
