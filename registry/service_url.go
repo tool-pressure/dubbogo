@@ -32,7 +32,7 @@ const (
 var serviceURLEventTypeStrings = [...]string{
 	"add service url",
 	"delete service url",
-	"updaet service url",
+	"update service url",
 }
 
 func (t ServiceURLEventType) String() string {
