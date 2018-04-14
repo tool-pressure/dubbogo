@@ -28,7 +28,7 @@ import (
 )
 
 const (
-	ProviderRegistryZkClient string = "consumer zk registry"
+	ProviderRegistryZkClient string = "provider zk registry"
 )
 
 type providerZookeeperRegistry struct {
