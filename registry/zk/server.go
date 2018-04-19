@@ -207,7 +207,6 @@ func (this *providerZookeeperRegistry) handleZkRestart() {
 		flag      bool
 		failTimes int
 		confIf    registry.ServiceConfigIf
-		services  []registry.ServiceConfigIf
 	)
 
 	defer this.wg.Done()
@@ -237,6 +236,7 @@ LOOP:
 				log.Info("providerZookeeperRegistry.validateZookeeperClient(zkAddr{%s}) = error{%#v}", this.client.zkAddrs, err)
 				if err == nil {
 					// copy this.services
+					var services []registry.ServiceConfigIf
 					this.Lock()
 					for _, confIf = range this.services {
 						services = append(services, confIf)
