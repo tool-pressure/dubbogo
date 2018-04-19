@@ -201,7 +201,7 @@ func (c *cacheSelector) run() {
 		}
 
 		// create new watcher
-		// 创建新watch，走到这一步要么第第一次for循环进来，要么是watch函数出错。watch出错说明registry.watch的zk client与zk连接出现了问题
+		// 创建新watch，走到这一步要么第一次for循环进来，要么是watch函数出错。watch出错说明registry.watch的zk client与zk连接出现了问题
 		w, err := c.so.Registry.Watch()
 		log.Debug("cache.Registry.Watch() = watch{%#v}, error{%#v}", w, err)
 		if err != nil {
@@ -373,7 +373,7 @@ func (c *cacheSelector) Close() error {
 }
 
 func (c *cacheSelector) String() string {
-	return "cache"
+	return "cache selector"
 }
 
 // selector主要有两个接口，对外接口Select用于获取地址，select调用get，get调用cp;
