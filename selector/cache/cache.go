@@ -123,19 +123,17 @@ func (c *cacheSelector) set(service string, services []*registry.ServiceURL) {
 	delete(c.ttls, service)
 }
 
-func ArrayRemoveAt(a interface{}, i int) {
+func filterServices(array *[]*registry.ServiceURL, i int) {
 	if i < 0 {
 		return
 	}
 
-	if array, ok := a.(*[]*registry.ServiceURL); ok {
-		if len(*array) <= i {
-			return
-		}
-		s := *array
-		s = append(s[:i], s[i+1:]...)
-		*array = s
+	if len(*array) <= i {
+		return
 	}
+	s := *array
+	s = append(s[:i], s[i+1:]...)
+	*array = s
 }
 
 func (c *cacheSelector) update(res *registry.Result) {
@@ -157,7 +155,7 @@ func (c *cacheSelector) update(res *registry.Result) {
 		for i, s := range services {
 			log.Debug("cache.services[%s][%d] = service{%#v}", sname, i, s)
 			if s.PrimitiveURL == res.Service.PrimitiveURL {
-				ArrayRemoveAt(&(services), i)
+				filterServices(&(services), i)
 			}
 		}
 	}
@@ -205,7 +203,10 @@ func (c *cacheSelector) run() {
 		w, err := c.so.Registry.Watch()
 		log.Debug("cache.Registry.Watch() = watch{%#v}, error{%#v}", w, err)
 		if err != nil {
-			// log.Println(err)
+			if c.quit() {
+				log.Warn("(Selector)run() quit now")
+				return
+			}
 			log.Warn("cacheSelector.Registry.Watch() = error{%v}", err)
 			time.Sleep(common.TimeSecondDuration(registry.REGISTRY_CONN_DELAY))
 			continue
