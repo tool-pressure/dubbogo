@@ -43,7 +43,7 @@ type ServiceConfigIf interface {
  * consumerZookeeperRegistry.services[0].RegistryConfig
  */
 
-// func (this *consumerZookeeperRegistry) Register(conf ServiceConfig) 函数用到了Service
+// func (c *consumerZookeeperRegistry) Register(conf ServiceConfig) 函数用到了Service
 type ServiceConfig struct {
 	Protocol string `required:"true",default:"dubbo"` // codec string, jsonrpc etc
 	Service  string `required:"true"`                 // 其本质是dubbo.xml中的interface
@@ -51,25 +51,29 @@ type ServiceConfig struct {
 	Version  string
 }
 
-func (this ServiceConfig) String() string {
-	return fmt.Sprintf("%s@%s-%s-%s", this.Service, this.Protocol, this.Group, this.Version)
+func (c ServiceConfig) Key() string {
+	return fmt.Sprintf("%s@%s", c.Service, c.Protocol)
+}
+
+func (c ServiceConfig) String() string {
+	return fmt.Sprintf("%s@%s-%s-%s", c.Service, c.Protocol, c.Group, c.Version)
 }
 
 // 目前不支持一个service的多个协议的使用，将来如果要支持，关键点就是修改这个函数
-func (this ServiceConfig) ServiceEqual(url *ServiceURL) bool {
-	if this.Protocol != url.Protocol {
+func (c ServiceConfig) ServiceEqual(url *ServiceURL) bool {
+	if c.Protocol != url.Protocol {
 		return false
 	}
 
-	if this.Service != url.Query.Get("interface") {
+	if c.Service != url.Query.Get("interface") {
 		return false
 	}
 
-	if this.Group != url.Group {
+	if c.Group != "" && c.Group != url.Group {
 		return false
 	}
 
-	if this.Version != url.Version {
+	if c.Version != "" && c.Version != url.Version {
 		return false
 	}
 
@@ -82,40 +86,40 @@ type ProviderServiceConfig struct {
 	Methods string
 }
 
-func (this ProviderServiceConfig) String() string {
+func (c ProviderServiceConfig) String() string {
 	return fmt.Sprintf(
 		"%s@%s-%s-%s-%s/%s",
-		this.ServiceConfig.Service,
-		this.ServiceConfig.Protocol,
-		this.ServiceConfig.Group,
-		this.ServiceConfig.Version,
-		this.Path,
-		this.Methods,
+		c.ServiceConfig.Service,
+		c.ServiceConfig.Protocol,
+		c.ServiceConfig.Group,
+		c.ServiceConfig.Version,
+		c.Path,
+		c.Methods,
 	)
 }
 
-func (this ProviderServiceConfig) ServiceEqual(url *ServiceURL) bool {
-	if this.ServiceConfig.Protocol != url.Protocol {
+func (c ProviderServiceConfig) ServiceEqual(url *ServiceURL) bool {
+	if c.ServiceConfig.Protocol != url.Protocol {
 		return false
 	}
 
-	if this.ServiceConfig.Service != url.Query.Get("interface") {
+	if c.ServiceConfig.Service != url.Query.Get("interface") {
 		return false
 	}
 
-	if this.ServiceConfig.Group != url.Group {
+	if c.Group != "" && c.ServiceConfig.Group != url.Group {
 		return false
 	}
 
-	if this.ServiceConfig.Version != url.Version {
+	if c.ServiceConfig.Version != "" && c.ServiceConfig.Version != url.Version {
 		return false
 	}
 
-	if this.Path != url.Path {
+	if c.Path != url.Path {
 		return false
 	}
 
-	if this.Methods != url.Query.Get("methods") {
+	if c.Methods != url.Query.Get("methods") {
 		return false
 	}
 
@@ -128,6 +132,6 @@ type ServerConfig struct {
 	Port     int `required:"true"`
 }
 
-func (this *ServerConfig) Address() string {
-	return gxnet.HostAddress(this.IP, this.Port)
+func (c *ServerConfig) Address() string {
+	return gxnet.HostAddress(c.IP, c.Port)
 }

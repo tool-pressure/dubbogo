@@ -86,7 +86,7 @@ type zookeeperRegistry struct {
 	// watcher *zookeeperWatcher
 	sync.Mutex // lock for client + services
 	client     *zookeeperClient
-	services   map[string]registry.ServiceConfigIf // service name -> service config
+	services   map[string]registry.ServiceConfigIf // service name + protocol -> service config
 	// zkPath -> zkData, 存储了当前使用者在各个服务下面注册的node,
 	// 如果注册了temp node，则zkData为空，如果注册了temp seq node,则zkData非空
 	// registers map[string]string
@@ -94,73 +94,71 @@ type zookeeperRegistry struct {
 
 func newZookeeperRegistry(opts registry.Options) (*zookeeperRegistry, error) {
 	var (
-		// ok       bool
-		err  error
-		this *zookeeperRegistry
+		err error
+		r   *zookeeperRegistry
 	)
 
-	this = &zookeeperRegistry{
+	r = &zookeeperRegistry{
 		RegistryConfig:    opts.RegistryConfig,
 		ApplicationConfig: opts.ApplicationConfig,
 		birth:             time.Now().Unix(),
 		done:              make(chan struct{}),
 	}
-	if this.Name == "" {
-		this.Name = common.NAME
+	if r.Name == "" {
+		r.Name = common.NAME
 	}
-	if this.Version == "" {
-		this.Version = common.VERSION
+	if r.Version == "" {
+		r.Version = common.VERSION
 	}
-	if this.RegistryConfig.Timeout == 0 {
-		this.RegistryConfig.Timeout = DEFAULT_REGISTRY_TIMEOUT
+	if r.RegistryConfig.Timeout == 0 {
+		r.RegistryConfig.Timeout = DEFAULT_REGISTRY_TIMEOUT
 	}
-	err = this.validateZookeeperClient()
+	err = r.validateZookeeperClient()
 	if err != nil {
 		return nil, err
 	}
 
-	// this.registers = make(map[string]string)
-	this.services = make(map[string]registry.ServiceConfigIf)
+	r.services = make(map[string]registry.ServiceConfigIf)
 
-	return this, nil
+	return r, nil
 }
 
-func (this *zookeeperRegistry) validateZookeeperClient() error {
+func (r *zookeeperRegistry) validateZookeeperClient() error {
 	var (
 		err error
 	)
 
 	err = nil
-	this.Lock()
-	if this.client == nil {
-		this.client, err = newZookeeperClient(RegistryZkClient, this.Address, this.RegistryConfig.Timeout)
+	r.Lock()
+	defer r.Unlock()
+	if r.client == nil {
+		r.client, err = newZookeeperClient(RegistryZkClient, r.Address, r.RegistryConfig.Timeout)
 		if err != nil {
 			log.Warn("newZookeeperClient(name{%s}, zk addresss{%v}, timeout{%d}) = error{%v}",
-				RegistryZkClient, this.Address, this.Timeout, err)
+				RegistryZkClient, r.Address, r.Timeout, err)
 		}
 	}
-	this.Unlock()
 
 	return err
 }
 
-func (this *zookeeperRegistry) GetService(string) ([]*registry.ServiceURL, error) {
+func (r *zookeeperRegistry) GetService(registry.ServiceConfigIf) ([]*registry.ServiceURL, error) {
 	return nil, nil
 }
 
-func (this *zookeeperRegistry) ListServices() ([]*registry.ServiceURL, error) {
+func (r *zookeeperRegistry) ListServices() ([]*registry.ServiceURL, error) {
 	return nil, nil
 }
 
-func (this *zookeeperRegistry) Watch() (registry.Watcher, error) {
+func (r *zookeeperRegistry) Watch() (registry.Watcher, error) {
 	return nil, nil
 }
 
-func (this *zookeeperRegistry) Close() {
-	this.client.Close()
+func (r *zookeeperRegistry) Close() {
+	r.client.Close()
 }
 
-func (this *zookeeperRegistry) registerZookeeperNode(root string, data []byte) error {
+func (r *zookeeperRegistry) registerZookeeperNode(root string, data []byte) error {
 	var (
 		err    error
 		zkPath string
@@ -169,54 +167,54 @@ func (this *zookeeperRegistry) registerZookeeperNode(root string, data []byte) e
 	// 假设root是/dubbo/com.ofpay.demo.api.UserProvider/consumers/jsonrpc，则创建完成的时候zkPath
 	// 是/dubbo/com.ofpay.demo.api.UserProvider/consumers/jsonrpc/0000000000之类的临时节点.
 	// 这个节点在连接有效的时候回一直存在，直到退出的时候才会被删除。
-	// 所以如果连接有效的话，想要删除/dubbo/com.ofpay.demo.api.UserProvider/consumers/jsonrpc的话，必须先把这个临时节点删除掉
-	this.Lock()
-	defer this.Unlock()
-	err = this.client.Create(root)
+	// 所以如果连接有效，欲删除/dubbo/com.ofpay.demo.api.UserProvider/consumers/jsonrpc的话，必须先把这个临时节点删除掉
+	r.Lock()
+	defer r.Unlock()
+	err = r.client.Create(root)
 	if err != nil {
 		log.Error("zk.Create(root{%s}) = err{%v}", root, err)
 		return err
 	}
-	zkPath, err = this.client.RegisterTempSeq(root, data)
+	zkPath, err = r.client.RegisterTempSeq(root, data)
 	// 创建完临时节点，zkPath = /dubbo/com.ofpay.demo.api.UserProvider/consumers/jsonrpc/0000000000
 	if err != nil {
 		log.Error("createTempSeqNode(root{%s}) = error{%v}", root, err)
 		return err
 	}
-	// this.registers[root] = string(data) // root = /dubbo/com.ofpay.demo.api.UserProvider/consumers/jsonrpc
+	// r.registers[root] = string(data) // root = /dubbo/com.ofpay.demo.api.UserProvider/consumers/jsonrpc
 	log.Debug("create a zookeeper node:%s", zkPath)
 
 	return nil
 }
 
-func (this *zookeeperRegistry) registerTempZookeeperNode(root string, node string) error {
+func (r *zookeeperRegistry) registerTempZookeeperNode(root string, node string) error {
 	var (
 		err    error
 		zkPath string
 	)
 
-	this.Lock()
-	defer this.Unlock()
-	err = this.client.Create(root)
+	r.Lock()
+	defer r.Unlock()
+	err = r.client.Create(root)
 	if err != nil {
 		log.Error("zk.Create(root{%s}) = err{%v}", root, err)
 		return err
 	}
-	zkPath, err = this.client.RegisterTemp(root, node)
+	zkPath, err = r.client.RegisterTemp(root, node)
 	if err != nil {
 		log.Error("RegisterTempNode(root{%s}, node{%s}) = error{%v}", root, node, err)
 		return err
 	}
-	// this.registers[zkPath] = ""
+	// r.registers[zkPath] = ""
 	log.Debug("create a zookeeper node:%s", zkPath)
 
 	return nil
 }
 
-func (this *zookeeperRegistry) Register(conf registry.ServiceConfig) error {
+func (r *zookeeperRegistry) Register(conf registry.ServiceConfig) error {
 	return nil
 }
 
-func (this *zookeeperRegistry) String() string {
+func (r *zookeeperRegistry) String() string {
 	return "zookeeper registry"
 }

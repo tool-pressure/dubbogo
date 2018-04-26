@@ -17,7 +17,7 @@ import (
 
 // Client is the interface used to make requests to services.
 // It supports Request/Response via Transport and Publishing via the Broker.
-// It also supports bidiectional streaming of requests.
+// It also supports bidirectional streaming of requests.
 type Client interface {
 	Init(...Option) error
 	Options() Options
@@ -29,6 +29,7 @@ type Client interface {
 
 // Request is the interface for a synchronous request used by Call or Stream
 type Request interface {
+	Protocol() string
 	Service() string
 	Method() string
 	ContentType() string
@@ -37,7 +38,7 @@ type Request interface {
 	Stream() bool
 }
 
-// Streamer is the inteface for a bidirectional synchronous stream
+// Streamer is the interface for a bidirectional synchronous stream
 type Streamer interface {
 	Context() context.Context
 	Request() Request

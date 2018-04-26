@@ -46,10 +46,12 @@ type CodecType int
 
 const (
 	JSONRPC CodecType = iota
+	DUBBO
 )
 
 var codecTypeStrings = [...]string{
 	"jsonrpc",
+	"dubbo",
 }
 
 func (c CodecType) String() string {

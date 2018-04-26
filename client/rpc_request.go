@@ -11,6 +11,7 @@
 package client
 
 type rpcRequest struct {
+	protocol    string
 	service     string
 	method      string
 	contentType string
@@ -18,7 +19,7 @@ type rpcRequest struct {
 	opts        RequestOptions
 }
 
-func newRpcRequest(service, method string, request interface{}, contentType string, reqOpts ...RequestOption) Request {
+func newRpcRequest(prootol, service, method string, request interface{}, contentType string, reqOpts ...RequestOption) Request {
 	var opts RequestOptions
 
 	for _, o := range reqOpts {
@@ -26,12 +27,17 @@ func newRpcRequest(service, method string, request interface{}, contentType stri
 	}
 
 	return &rpcRequest{
+		protocol:    prootol,
 		service:     service,
 		method:      method,
 		request:     request,
 		contentType: contentType,
 		opts:        opts,
 	}
+}
+
+func (r *rpcRequest) Protocol() string {
+	return r.protocol
 }
 
 func (r *rpcRequest) ContentType() string {

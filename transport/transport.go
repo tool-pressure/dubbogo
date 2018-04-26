@@ -62,13 +62,6 @@ func NewHTTPTransport(opts ...Option) Transport {
 	return newHTTPTransport(opts...)
 }
 
-func NewTransport(t Type, opts ...Option) Transport {
-	switch t {
-	case TCP:
-		return newTcpTransport(opts...)
-	case HTTP:
-		return newHTTPTransport(opts...)
-	}
-
-	return nil
+func NewTcpTransport(opts ...Option) Transport {
+	return newTcpTransport(opts...)
 }

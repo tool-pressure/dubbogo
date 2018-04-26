@@ -41,7 +41,7 @@ func NewProviderZookeeperRegistry(opts ...registry.Option) registry.Registry {
 		err     error
 		options registry.Options
 		reg     *zookeeperRegistry
-		this    *providerZookeeperRegistry
+		s       *providerZookeeperRegistry
 	)
 
 	options = registry.Options{}
@@ -54,33 +54,33 @@ func NewProviderZookeeperRegistry(opts ...registry.Option) registry.Registry {
 		return nil
 	}
 	reg.client.name = ProviderRegistryZkClient
-	this = &providerZookeeperRegistry{zookeeperRegistry: reg, zkPath: make(map[string]int)}
-	this.wg.Add(1)
-	go this.handleZkRestart()
+	s = &providerZookeeperRegistry{zookeeperRegistry: reg, zkPath: make(map[string]int)}
+	s.wg.Add(1)
+	go s.handleZkRestart()
 
-	return this
+	return s
 }
 
-func (this *providerZookeeperRegistry) validateZookeeperClient() error {
+func (s *providerZookeeperRegistry) validateZookeeperClient() error {
 	var (
 		err error
 	)
 
 	err = nil
-	this.Lock()
-	if this.client == nil {
-		this.client, err = newZookeeperClient(ProviderRegistryZkClient, this.Address, this.RegistryConfig.Timeout)
+	s.Lock()
+	if s.client == nil {
+		s.client, err = newZookeeperClient(ProviderRegistryZkClient, s.Address, s.RegistryConfig.Timeout)
 		if err != nil {
 			log.Warn("newZookeeperClient(name{%s}, zk addresss{%v}, timeout{%d}) = error{%v}",
-				ProviderRegistryZkClient, this.Address, this.Timeout, err)
+				ProviderRegistryZkClient, s.Address, s.Timeout, err)
 		}
 	}
-	this.Unlock()
+	s.Unlock()
 
 	return err
 }
 
-func (this *providerZookeeperRegistry) Register(c interface{}) error {
+func (s *providerZookeeperRegistry) Register(c interface{}) error {
 	var (
 		ok   bool
 		err  error
@@ -93,29 +93,29 @@ func (this *providerZookeeperRegistry) Register(c interface{}) error {
 
 	// 检验服务是否已经注册过
 	ok = false
-	this.Lock()
+	s.Lock()
 	// 注意此处与consumerZookeeperRegistry的差异，consumer用的是conf.Service，因为consumer要提供watch功能给selector使用
 	// provider允许注册同一个service的多个group or version
-	_, ok = this.services[conf.String()]
-	this.Unlock()
+	_, ok = s.services[conf.String()]
+	s.Unlock()
 	if ok {
 		return fmt.Errorf("Service{%s} has been registered", conf.String())
 	}
 
-	err = this.register(&conf)
+	err = s.register(&conf)
 	if err != nil {
 		return err
 	}
 
-	this.Lock()
-	this.services[conf.String()] = &conf
+	s.Lock()
+	s.services[conf.String()] = &conf
 	log.Debug("(providerZookeeperRegistry)Register(conf{%#v})", conf)
-	this.Unlock()
+	s.Unlock()
 
 	return nil
 }
 
-func (this *providerZookeeperRegistry) register(conf *registry.ProviderServiceConfig) error {
+func (s *providerZookeeperRegistry) register(conf *registry.ProviderServiceConfig) error {
 	var (
 		err        error
 		revision   string
@@ -130,15 +130,15 @@ func (this *providerZookeeperRegistry) register(conf *registry.ProviderServiceCo
 		return fmt.Errorf("conf{Service:%s, Methods:%s}", conf.ServiceConfig.Service, conf.Methods)
 	}
 
-	err = this.validateZookeeperClient()
+	err = s.validateZookeeperClient()
 	if err != nil {
 		return err
 	}
 	// 先创建服务下面的provider node
 	dubboPath = fmt.Sprintf("/dubbo/%s/%s", conf.Service, DubboNodes[PROVIDER])
-	this.Lock()
-	err = this.client.Create(dubboPath)
-	this.Unlock()
+	s.Lock()
+	err = s.client.Create(dubboPath)
+	s.Unlock()
 	if err != nil {
 		log.Error("zkClient.create(path{%s}) = error{%v}", dubboPath, err)
 		return err
@@ -146,8 +146,8 @@ func (this *providerZookeeperRegistry) register(conf *registry.ProviderServiceCo
 
 	params = url.Values{}
 	params.Add("interface", conf.ServiceConfig.Service)
-	params.Add("application", this.ApplicationConfig.Name)
-	revision = this.ApplicationConfig.Version
+	params.Add("application", s.ApplicationConfig.Name)
+	revision = s.ApplicationConfig.Version
 	if revision == "" {
 		revision = "0.1.0"
 	}
@@ -160,15 +160,15 @@ func (this *providerZookeeperRegistry) register(conf *registry.ProviderServiceCo
 	// params.Add("category", (DubboType(PROVIDER)).Role())
 	params.Add("category", (DubboType(PROVIDER)).String())
 	params.Add("dubbo", "dubbo-provider-golang-"+version.Version)
-	params.Add("org", this.ApplicationConfig.Organization)
-	params.Add("module", this.ApplicationConfig.Module)
-	params.Add("owner", this.ApplicationConfig.Owner)
+	params.Add("org", s.ApplicationConfig.Organization)
+	params.Add("module", s.ApplicationConfig.Module)
+	params.Add("owner", s.ApplicationConfig.Owner)
 	params.Add("side", (DubboType(PROVIDER)).Role())
 	params.Add("pid", processID)
 	params.Add("ip", localIp)
-	params.Add("timeout", fmt.Sprintf("%v", this.Timeout))
+	params.Add("timeout", fmt.Sprintf("%v", s.Timeout))
 	// params.Add("timestamp", time.Now().Format("20060102150405"))
-	params.Add("timestamp", fmt.Sprintf("%d", this.birth))
+	params.Add("timestamp", fmt.Sprintf("%d", s.birth))
 	if conf.ServiceConfig.Version != "" {
 		params.Add("version", conf.ServiceConfig.Version)
 	}
@@ -181,19 +181,17 @@ func (this *providerZookeeperRegistry) register(conf *registry.ProviderServiceCo
 	}
 
 	urlPath = conf.Service
-	if this.zkPath[urlPath] != 0 {
-		urlPath += strconv.Itoa(this.zkPath[urlPath])
+	if s.zkPath[urlPath] != 0 {
+		urlPath += strconv.Itoa(s.zkPath[urlPath])
 	}
-	this.zkPath[urlPath]++
+	s.zkPath[urlPath]++
 	rawURL = fmt.Sprintf("%s://%s/%s?%s", conf.Protocol, conf.Path, urlPath, params.Encode())
-
-	log.Debug("provider url:%s", rawURL)
 	encodedURL = url.QueryEscape(rawURL)
-	log.Debug("url.QueryEscape(consumer url:%s) = %s", rawURL, encodedURL)
 
 	// 把自己注册service providers
 	dubboPath = fmt.Sprintf("/dubbo/%s/%s", conf.Service, (DubboType(PROVIDER)).String())
-	err = this.registerTempZookeeperNode(dubboPath, encodedURL)
+	err = s.registerTempZookeeperNode(dubboPath, encodedURL)
+	log.Debug("provider path:%s, url:%s", dubboPath, rawURL)
 	if err != nil {
 		return err
 	}
@@ -201,7 +199,7 @@ func (this *providerZookeeperRegistry) register(conf *registry.ProviderServiceCo
 	return nil
 }
 
-func (this *providerZookeeperRegistry) handleZkRestart() {
+func (s *providerZookeeperRegistry) handleZkRestart() {
 	var (
 		err       error
 		flag      bool
@@ -210,42 +208,42 @@ func (this *providerZookeeperRegistry) handleZkRestart() {
 		services  []registry.ServiceConfigIf
 	)
 
-	defer this.wg.Done()
+	defer s.wg.Done()
 LOOP:
 	for {
 		select {
-		case <-this.done:
+		case <-s.done:
 			log.Warn("(providerZookeeperRegistry)reconnectZkRegistry goroutine exit now...")
 			break LOOP
 			// re-register all services
-		case <-this.client.done():
-			this.Lock()
-			this.client.Close()
-			this.client = nil
-			this.Unlock()
+		case <-s.client.done():
+			s.Lock()
+			s.client.Close()
+			s.client = nil
+			s.Unlock()
 
 			// 接zk，直至成功
 			failTimes = 0
 			for {
 				select {
-				case <-this.done:
+				case <-s.done:
 					log.Warn("(providerZookeeperRegistry)reconnectZkRegistry goroutine exit now...")
 					break LOOP
 				case <-time.After(common.TimeSecondDuration(failTimes * registry.REGISTRY_CONN_DELAY)): // 防止疯狂重连zk
 				}
-				err = this.validateZookeeperClient()
-				log.Info("providerZookeeperRegistry.validateZookeeperClient(zkAddr{%s}) = error{%#v}", this.client.zkAddrs, err)
+				err = s.validateZookeeperClient()
+				log.Info("providerZookeeperRegistry.validateZookeeperClient(zkAddr{%s}) = error{%#v}", s.client.zkAddrs, err)
 				if err == nil {
-					// copy this.services
-					this.Lock()
-					for _, confIf = range this.services {
+					// copy s.services
+					s.Lock()
+					for _, confIf = range s.services {
 						services = append(services, confIf)
 					}
-					this.Unlock()
+					s.Unlock()
 
 					flag = true
 					for _, confIf = range services {
-						err = this.register(confIf.(*registry.ProviderServiceConfig))
+						err = s.register(confIf.(*registry.ProviderServiceConfig))
 						if err != nil {
 							log.Error("in (providerZookeeperRegistry)reRegister, (providerZookeeperRegistry)register(conf{%#v}) = error{%#v}",
 								confIf.(*registry.ProviderServiceConfig), err)
@@ -266,37 +264,37 @@ LOOP:
 	}
 }
 
-func (this *providerZookeeperRegistry) String() string {
+func (s *providerZookeeperRegistry) String() string {
 	return "dubbogo rpc provider zookeeper registry"
 }
 
-func (this *providerZookeeperRegistry) closeRegisters() {
+func (s *providerZookeeperRegistry) closeRegisters() {
 	var (
 		// err error
 		key string
 	)
 
-	this.Lock()
+	s.Lock()
+	defer s.Unlock()
 	log.Info("begin to close provider zk client")
 	// 先关闭旧client，以关闭tmp node
-	this.client.Close()
-	this.client = nil
-	// for key = range this.registers {
+	s.client.Close()
+	s.client = nil
+	// for key = range s.registers {
 	// 	log.Debug("delete register provider zk path:%s, err = %v\n", key, err)
 	// 	// do not delete related zk path, 'cause it's a temp zk node path
-	// 	// delete(this.registers, key)
+	// 	// delete(s.registers, key)
 	// }
-	// this.registers = nil
-	for key = range this.services {
+	// s.registers = nil
+	for key = range s.services {
 		log.Debug("delete register provider zk path:%s", key)
-		// 	delete(this.services, key)
+		// 	delete(s.services, key)
 	}
-	this.services = nil
-	this.Unlock()
+	s.services = nil
 }
 
-func (this *providerZookeeperRegistry) Close() {
-	close(this.done)
-	this.wg.Wait()
-	this.closeRegisters()
+func (s *providerZookeeperRegistry) Close() {
+	close(s.done)
+	s.wg.Wait()
+	s.closeRegisters()
 }

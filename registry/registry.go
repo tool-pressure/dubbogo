@@ -28,7 +28,7 @@ type Watcher interface {
 type Registry interface {
 	// Register(conf ServiceConfig) error
 	Register(conf interface{}) error
-	GetService(string) ([]*ServiceURL, error)
+	GetService(ServiceConfigIf) ([]*ServiceURL, error)
 	ListServices() ([]*ServiceURL, error)
 	Watch() (Watcher, error)
 	Close()

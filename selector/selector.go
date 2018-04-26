@@ -15,7 +15,7 @@ type Selector interface {
 	Init(opts ...Option) error
 	Options() Options
 	// Select returns a function which should return the next node
-	Select(service string) (Next, error)
+	Select(conf registry.ServiceConfigIf) (Next, error)
 	// Mark sets the success/error against a node
 	Mark(service string, url *registry.ServiceURL, err error)
 	// Reset returns state back to zero for a service

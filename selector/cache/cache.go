@@ -72,14 +72,15 @@ func (c *cacheSelector) del(service string) {
 	delete(c.ttls, service)
 }
 
-func (c *cacheSelector) get(service string) ([]*registry.ServiceURL, error) {
+func (c *cacheSelector) get(s registry.ServiceConfigIf) ([]*registry.ServiceURL, error) {
 	c.Lock()
 	defer c.Unlock()
 
 	// check the cache first
-	services, ok := c.cache[service]
-	ttl, kk := c.ttls[service]
-	log.Debug("c.cache[service{%v}] = services{%v}", service, services)
+	serviceConf, _ := s.(registry.ServiceConfig)
+	services, ok := c.cache[serviceConf.Service]
+	ttl, kk := c.ttls[serviceConf.Service]
+	log.Debug("c.cache[service{%v}] = services{%v}", serviceConf.Service, services)
 
 	// got results, copy and return
 	if ok && len(services) > 0 {
@@ -89,24 +90,24 @@ func (c *cacheSelector) get(service string) ([]*registry.ServiceURL, error) {
 			return c.cp(services), nil
 		}
 		log.Warn("c.cache[service{%v}] = services{%v}, array ttl{%v} is less than cache.ttl{%v}",
-			service, services, ttl, c.ttl)
+			serviceConf.Service, services, ttl, c.ttl)
 	}
 
 	// cache miss or ttl expired
 	// now ask the registry
-	ss, err := c.so.Registry.GetService(service)
+	ss, err := c.so.Registry.GetService(s)
 	if err != nil {
-		log.Error("registry.GetService(service{%v}) = err{%T, %v}", service, err, err)
+		log.Error("registry.GetService(service{%#v}) = err{%T, %v}", serviceConf, err, err)
 		if ok && len(services) > 0 {
-			log.Error("service{%v} timeout. can not get new service array, use old instead", service)
+			log.Error("service{%v} timeout. can not get new service array, use old instead", serviceConf.Service)
 			return services, nil // 超时后，如果获取不到新的，就先暂用旧的
 		}
 		return nil, err
 	}
 
 	// we didn't have any results so cache
-	c.cache[service] = c.cp(ss)
-	c.ttls[service] = time.Now().Add(c.ttl)
+	c.cache[serviceConf.Service] = c.cp(ss)
+	c.ttls[serviceConf.Service] = time.Now().Add(c.ttl)
 	return ss, nil
 }
 
@@ -320,7 +321,7 @@ func (c *cacheSelector) Options() selector.Options {
 	return c.so
 }
 
-func (c *cacheSelector) Select(service string) (selector.Next, error) {
+func (c *cacheSelector) Select(service registry.ServiceConfigIf) (selector.Next, error) {
 	var (
 		err      error
 		services []*registry.ServiceURL

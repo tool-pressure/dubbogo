@@ -74,7 +74,7 @@ func NewServiceURL(urlString string) (*ServiceURL, error) {
 		err          error
 		rawUrlString string
 		serviceUrl   *url.URL
-		this         = &ServiceURL{}
+		s            = &ServiceURL{}
 	)
 
 	rawUrlString, err = url.QueryUnescape(urlString)
@@ -87,42 +87,42 @@ func NewServiceURL(urlString string) (*ServiceURL, error) {
 		return nil, fmt.Errorf("url.Parse(url string{%s}),  error{%v}", rawUrlString, err)
 	}
 
-	this.Query, err = url.ParseQuery(serviceUrl.RawQuery)
+	s.Query, err = url.ParseQuery(serviceUrl.RawQuery)
 	if err != nil {
 		return nil, fmt.Errorf("url.ParseQuery(raw url string{%s}),  error{%v}", serviceUrl.RawQuery, err)
 	}
 
-	this.PrimitiveURL = urlString
-	this.Protocol = serviceUrl.Scheme
-	this.Location = serviceUrl.Host
-	this.Path = serviceUrl.Path
-	if strings.Contains(this.Location, ":") {
-		this.Ip, this.Port, err = net.SplitHostPort(this.Location)
+	s.PrimitiveURL = urlString
+	s.Protocol = serviceUrl.Scheme
+	s.Location = serviceUrl.Host
+	s.Path = serviceUrl.Path
+	if strings.Contains(s.Location, ":") {
+		s.Ip, s.Port, err = net.SplitHostPort(s.Location)
 		if err != nil {
-			return nil, fmt.Errorf("net.SplitHostPort(Url.Host{%s}), error{%v}", this.Location, err)
+			return nil, fmt.Errorf("net.SplitHostPort(Url.Host{%s}), error{%v}", s.Location, err)
 		}
 	}
-	this.Group = this.Query.Get("group")
-	this.Version = this.Query.Get("version")
+	s.Group = s.Query.Get("group")
+	s.Version = s.Query.Get("version")
 
-	return this, nil
+	return s, nil
 }
 
-func (this *ServiceConfig) ServiceConfig() *ServiceConfig {
+func (s *ServiceConfig) ServiceConfig() *ServiceConfig {
 	return &ServiceConfig{
-		Protocol: this.Protocol,
-		Service:  this.Service,
-		Group:    this.Group,
-		Version:  this.Version,
+		Protocol: s.Protocol,
+		Service:  s.Service,
+		Group:    s.Group,
+		Version:  s.Version,
 	}
 }
 
-func (this *ServiceURL) CheckMethod(method string) bool {
+func (s *ServiceURL) CheckMethod(method string) bool {
 	var (
 		methodArray []string
 	)
 
-	methodArray = strings.Split(this.Query.Get("methods"), ",")
+	methodArray = strings.Split(s.Query.Get("methods"), ",")
 	for _, m := range methodArray {
 		if m == method {
 			return true
