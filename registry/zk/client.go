@@ -13,7 +13,6 @@ package zookeeper
 import (
 	"fmt"
 	"net/url"
-	"regexp"
 	"time"
 )
 
@@ -37,7 +36,6 @@ type consumerZookeeperRegistry struct {
 }
 
 func NewConsumerZookeeperRegistry(opts ...registry.Option) registry.Registry {
-	regexp.MustCompile()
 	var (
 		err     error
 		options registry.Options
