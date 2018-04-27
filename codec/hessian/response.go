@@ -68,12 +68,12 @@ func UnpackResponse(buf []byte) (interface{}, error) {
 	}
 
 	// Header{req id}
-	var ID int64 = int64(binary.BigEndian.Uint64(buf[4:]))
-	fmt.Printf("response package id:%#X\n", ID)
+	//var ID int64 = int64(binary.BigEndian.Uint64(buf[4:]))
+	//fmt.Printf("response package id:%#X\n", ID)
 
 	// Header{body len}
 	var bodyLen int32 = int32(binary.BigEndian.Uint32(buf[12:]))
-	fmt.Printf("response package body length:%d\n", bodyLen)
+	//fmt.Printf("response package body length:%d\n", bodyLen)
 	if int(bodyLen+HEADER_LENGTH) != length {
 		return nil, ErrIllegalPackage
 	}
@@ -146,8 +146,7 @@ func ReflectResponse(rsp interface{}, rspType reflect.Type) interface{} {
 		}
 		return retMap
 	case reflect.Struct:
-		// s := rsp.(interface{})
-		return rsp
+		return rsp.(reflect.Value).Elem().Interface()
 	}
 
 	return nil
