@@ -5,7 +5,7 @@
 # LICENCE : Apache Licence 2.0
 # EMAIL   : alexstocks@foxmail.com
 # MOD     : 2016-06-17 11:06
-# FILE    : server.go
+# FILE    : provider.go
 ******************************************************/
 
 package zookeeper
