@@ -223,7 +223,7 @@ func (c *serverCodec) ReadBody(x interface{}) error {
 	// 在这里把请求参数json 字符串转换成了相应的struct
 	params = []byte(*c.req.Params)
 	// if c.req.Method == BatchMethod {
-	// 	return fmt.Errorf("batch request is not allowed")
+	// 	return jerrors.Errorf("batch request is not allowed")
 	// 	/*
 	// 		arg := x.(*BatchArg)
 	// 		arg.srv = c.srv

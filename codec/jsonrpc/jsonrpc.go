@@ -2,8 +2,11 @@ package jsonrpc
 
 import (
 	"bytes"
-	"fmt"
 	"io"
+)
+
+import (
+	jerrors "github.com/juju/errors"
 )
 
 import (
@@ -34,7 +37,7 @@ func (j *jsonCodec) Write(m *codec.Message, b interface{}) error {
 	case codec.Response:
 		return j.s.Write(m, b)
 	default:
-		return fmt.Errorf("Unrecognised message type: %v", m.Type)
+		return jerrors.Errorf("Unrecognised message type: %v", m.Type)
 	}
 }
 
@@ -48,7 +51,7 @@ func (j *jsonCodec) ReadHeader(m *codec.Message, mt codec.MessageType) error {
 	case codec.Response:
 		return j.c.ReadHeader(m)
 	default:
-		return fmt.Errorf("Unrecognised message type: %v", mt)
+		return jerrors.Errorf("Unrecognised message type: %v", mt)
 	}
 	return nil
 }
@@ -60,7 +63,7 @@ func (j *jsonCodec) ReadBody(b interface{}) error {
 	case codec.Response:
 		return j.c.ReadBody(b)
 	default:
-		return fmt.Errorf("Unrecognised message type: %v", j.mt)
+		return jerrors.Errorf("Unrecognised message type: %v", j.mt)
 	}
 	return nil
 }

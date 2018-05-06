@@ -19,6 +19,7 @@ import (
 
 import (
 	log "github.com/AlexStocks/log4go"
+	jerrors "github.com/juju/errors"
 )
 
 import (
@@ -88,7 +89,7 @@ func (s *providerZookeeperRegistry) Register(c interface{}) error {
 	)
 
 	if conf, ok = c.(registry.ProviderServiceConfig); !ok {
-		return fmt.Errorf("@c{%v} type is not registry.ServiceConfig", c)
+		return jerrors.Errorf("@c{%v} type is not registry.ServiceConfig", c)
 	}
 
 	// 检验服务是否已经注册过
@@ -99,7 +100,7 @@ func (s *providerZookeeperRegistry) Register(c interface{}) error {
 	_, ok = s.services[conf.String()]
 	s.Unlock()
 	if ok {
-		return fmt.Errorf("Service{%s} has been registered", conf.String())
+		return jerrors.Errorf("Service{%s} has been registered", conf.String())
 	}
 
 	err = s.register(&conf)
@@ -127,7 +128,7 @@ func (s *providerZookeeperRegistry) register(conf *registry.ProviderServiceConfi
 	)
 
 	if conf.ServiceConfig.Service == "" || conf.Methods == "" {
-		return fmt.Errorf("conf{Service:%s, Methods:%s}", conf.ServiceConfig.Service, conf.Methods)
+		return jerrors.Errorf("conf{Service:%s, Methods:%s}", conf.ServiceConfig.Service, conf.Methods)
 	}
 
 	err = s.validateZookeeperClient()
@@ -291,6 +292,18 @@ func (s *providerZookeeperRegistry) closeRegisters() {
 		// 	delete(s.services, key)
 	}
 	s.services = nil
+}
+
+func (r *providerZookeeperRegistry) GetService(registry.ServiceConfigIf) ([]*registry.ServiceURL, error) {
+	return nil, nil
+}
+
+func (r *providerZookeeperRegistry) ListServices() ([]*registry.ServiceURL, error) {
+	return nil, nil
+}
+
+func (r *providerZookeeperRegistry) Watch() (registry.Watcher, error) {
+	return nil, nil
 }
 
 func (s *providerZookeeperRegistry) Close() {

@@ -17,6 +17,10 @@ import (
 	"strings"
 )
 
+import (
+	jerrors "github.com/juju/errors"
+)
+
 //////////////////////////////////////////
 // service url event type
 //////////////////////////////////////////
@@ -79,17 +83,17 @@ func NewServiceURL(urlString string) (*ServiceURL, error) {
 
 	rawUrlString, err = url.QueryUnescape(urlString)
 	if err != nil {
-		return nil, fmt.Errorf("url.QueryUnescape(%s),  error{%v}", urlString, err)
+		return nil, jerrors.Errorf("url.QueryUnescape(%s),  error{%v}", urlString, err)
 	}
 
 	serviceUrl, err = url.Parse(rawUrlString)
 	if err != nil {
-		return nil, fmt.Errorf("url.Parse(url string{%s}),  error{%v}", rawUrlString, err)
+		return nil, jerrors.Errorf("url.Parse(url string{%s}),  error{%v}", rawUrlString, err)
 	}
 
 	s.Query, err = url.ParseQuery(serviceUrl.RawQuery)
 	if err != nil {
-		return nil, fmt.Errorf("url.ParseQuery(raw url string{%s}),  error{%v}", serviceUrl.RawQuery, err)
+		return nil, jerrors.Errorf("url.ParseQuery(raw url string{%s}),  error{%v}", serviceUrl.RawQuery, err)
 	}
 
 	s.PrimitiveURL = urlString
@@ -99,7 +103,7 @@ func NewServiceURL(urlString string) (*ServiceURL, error) {
 	if strings.Contains(s.Location, ":") {
 		s.Ip, s.Port, err = net.SplitHostPort(s.Location)
 		if err != nil {
-			return nil, fmt.Errorf("net.SplitHostPort(Url.Host{%s}), error{%v}", s.Location, err)
+			return nil, jerrors.Errorf("net.SplitHostPort(Url.Host{%s}), error{%v}", s.Location, err)
 		}
 	}
 	s.Group = s.Query.Get("group")

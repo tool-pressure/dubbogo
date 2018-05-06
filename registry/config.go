@@ -30,19 +30,6 @@ type ServiceConfigIf interface {
 	ServiceEqual(url *ServiceURL) bool
 }
 
-/*
- * 这个struct不可包含RegistryConfig
- *
- * zookeeperRegistry已经包含了RegistryConfig,而ConsumerzookeeperRegistry定义如下
- * type consumerZookeeperRegistry struct {
- *		*zookeeperRegistry
- *  	services []ServiceConf
- * }
- * 如果ConsumerRegistryConfig包含RegistryConfig,则有如下重复定义:
- * consumerZookeeperRegistry.zookeeperRegistry.RegistryConfig
- * consumerZookeeperRegistry.services[0].RegistryConfig
- */
-
 // func (c *consumerZookeeperRegistry) Register(conf ServiceConfig) 函数用到了Service
 type ServiceConfig struct {
 	Protocol string `required:"true",default:"dubbo"` // codec string, jsonrpc etc

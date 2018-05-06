@@ -41,7 +41,7 @@ const (
 
 var (
 	DubboNodes              = [...]string{"consumers", "configurators", "routers", "providers"}
-	DubboRole               = [...]string{"consumer", "", "", "provider"} //
+	DubboRole               = [...]string{"consumer", "", "", "provider"}
 	RegistryZkClient string = "zk registry"
 	processID               = ""
 	localIp                 = ""
@@ -68,11 +68,6 @@ const (
 	DEFAULT_REGISTRY_TIMEOUT = 1
 )
 
-type serviceZKPath struct {
-	path string
-	node string
-}
-
 // 从目前消费者的功能来看，它实现:
 // 1 消费者在每个服务下的/dubbo/service/consumers下注册
 // 2 消费者watch /dubbo/service/providers变动
@@ -83,13 +78,9 @@ type zookeeperRegistry struct {
 	birth                   int64          // time of file birth, seconds since Epoch; 0 if unknown
 	wg                      sync.WaitGroup // wg+done for zk restart
 	done                    chan struct{}
-	// watcher *zookeeperWatcher
-	sync.Mutex // lock for client + services
-	client     *zookeeperClient
-	services   map[string]registry.ServiceConfigIf // service name + protocol -> service config
-	// zkPath -> zkData, 存储了当前使用者在各个服务下面注册的node,
-	// 如果注册了temp node，则zkData为空，如果注册了temp seq node,则zkData非空
-	// registers map[string]string
+	sync.Mutex              // lock for client + services
+	client                  *zookeeperClient
+	services                map[string]registry.ServiceConfigIf // service name + protocol -> service config
 }
 
 func newZookeeperRegistry(opts registry.Options) (*zookeeperRegistry, error) {
@@ -140,18 +131,6 @@ func (r *zookeeperRegistry) validateZookeeperClient() error {
 	}
 
 	return err
-}
-
-func (r *zookeeperRegistry) GetService(registry.ServiceConfigIf) ([]*registry.ServiceURL, error) {
-	return nil, nil
-}
-
-func (r *zookeeperRegistry) ListServices() ([]*registry.ServiceURL, error) {
-	return nil, nil
-}
-
-func (r *zookeeperRegistry) Watch() (registry.Watcher, error) {
-	return nil, nil
 }
 
 func (r *zookeeperRegistry) Close() {
@@ -208,10 +187,6 @@ func (r *zookeeperRegistry) registerTempZookeeperNode(root string, node string) 
 	// r.registers[zkPath] = ""
 	log.Debug("create a zookeeper node:%s", zkPath)
 
-	return nil
-}
-
-func (r *zookeeperRegistry) Register(conf registry.ServiceConfig) error {
 	return nil
 }
 

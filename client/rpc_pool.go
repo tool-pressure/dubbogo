@@ -17,6 +17,10 @@ import (
 )
 
 import (
+	jerrors "github.com/juju/errors"
+)
+
+import (
 	"github.com/AlexStocks/dubbogo/transport"
 )
 
@@ -28,7 +32,7 @@ type poolConn struct {
 
 func (p *poolConn) Close() error {
 	// log.Debug("close poolConn{%#v}", p)
-	var err error = fmt.Errorf("close poolConn{%#v} again", p)
+	var err error = jerrors.Errorf("close poolConn{%#v} again", p)
 	p.once.Do(func() {
 		p.Client.Close()
 		p.created = 0

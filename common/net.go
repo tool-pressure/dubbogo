@@ -6,6 +6,10 @@ import (
 	"time"
 )
 
+import (
+	jerrors "github.com/juju/errors"
+)
+
 var (
 	privateBlocks []*net.IPNet
 )
@@ -27,7 +31,7 @@ func GetLocalIP(addr string) (string, error) {
 
 	addrs, err := net.InterfaceAddrs()
 	if err != nil {
-		return "", fmt.Errorf("Failed to get interface addresses! Err: %v", err)
+		return "", jerrors.Errorf("Failed to get interface addresses! Err: %v", err)
 	}
 
 	var ipAddr []byte
@@ -60,7 +64,7 @@ func GetLocalIP(addr string) (string, error) {
 	}
 
 	if ipAddr == nil {
-		return "", fmt.Errorf("No private IP address found, and explicit IP not provided")
+		return "", jerrors.Errorf("No private IP address found, and explicit IP not provided")
 	}
 
 	return net.IP(ipAddr).String(), nil

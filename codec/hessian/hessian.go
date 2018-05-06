@@ -17,6 +17,10 @@ import (
 )
 
 import (
+	jerrors "github.com/juju/errors"
+)
+
+import (
 	"github.com/AlexStocks/dubbogo/codec"
 )
 
@@ -44,7 +48,7 @@ func (j *hessianCodec) Write(m *codec.Message, b interface{}) error {
 	case codec.Response:
 		// return j.s.Write(m, b)
 	default:
-		return fmt.Errorf("Unrecognised message type: %v", m.Type)
+		return jerrors.Errorf("Unrecognised message type: %v", m.Type)
 	}
 
 	return nil
@@ -60,7 +64,7 @@ func (j *hessianCodec) ReadHeader(m *codec.Message, mt codec.MessageType) error 
 	case codec.Response:
 		// return j.c.ReadHeader(m)
 	default:
-		return fmt.Errorf("Unrecognised message type: %v", mt)
+		return jerrors.Errorf("Unrecognised message type: %v", mt)
 	}
 	return nil
 }
@@ -72,7 +76,7 @@ func (j *hessianCodec) ReadBody(b interface{}) error {
 	case codec.Response:
 		// return j.c.ReadBody(b)
 	default:
-		return fmt.Errorf("Unrecognised message type: %v", j.mt)
+		return jerrors.Errorf("Unrecognised message type: %v", j.mt)
 	}
 	return nil
 }

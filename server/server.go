@@ -21,6 +21,10 @@ import (
 )
 
 import (
+	jerrors "github.com/juju/errors"
+)
+
+import (
 	log "github.com/AlexStocks/log4go"
 )
 
@@ -153,7 +157,7 @@ func (this *server) newCodec(contentType string) (codec.NewCodec, error) {
 	if cf, ok = defaultCodecs[contentType]; ok {
 		return cf, nil
 	}
-	return nil, fmt.Errorf("Unsupported Content-Type: %s", contentType)
+	return nil, jerrors.Errorf("Unsupported Content-Type: %s", contentType)
 }
 
 func (this *server) Options() Options {
@@ -239,7 +243,7 @@ func (this *server) Handle(h Handler) error {
 	}
 
 	if flag == 0 {
-		return fmt.Errorf("fail to register Handler{service:%s, version:%s}", serviceConf.Service, serviceConf.Version)
+		return jerrors.Errorf("fail to register Handler{service:%s, version:%s}", serviceConf.Service, serviceConf.Version)
 	}
 
 	this.Lock()

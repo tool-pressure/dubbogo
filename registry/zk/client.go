@@ -18,6 +18,7 @@ import (
 
 import (
 	log "github.com/AlexStocks/log4go"
+	jerrors "github.com/juju/errors"
 )
 
 import (
@@ -87,7 +88,7 @@ func (c *consumerZookeeperRegistry) Register(sc interface{}) error {
 	)
 
 	if conf, ok = sc.(registry.ServiceConfig); !ok {
-		return fmt.Errorf("@c{%v} type is not registry.ServiceConfig", c)
+		return jerrors.Errorf("@c{%v} type is not registry.ServiceConfig", c)
 	}
 
 	// 检验服务是否已经注册过
@@ -99,7 +100,7 @@ func (c *consumerZookeeperRegistry) Register(sc interface{}) error {
 	_, ok = c.services[conf.Key()]
 	c.Unlock()
 	if ok {
-		return fmt.Errorf("Service{%s} has been registered", conf.Service)
+		return jerrors.Errorf("Service{%s} has been registered", conf.Service)
 	}
 
 	err = c.register(&conf)
@@ -313,7 +314,7 @@ func (c *consumerZookeeperRegistry) GetService(i registry.ServiceConfigIf) ([]*r
 
 	sc, ok = i.(registry.ServiceConfig)
 	if !ok {
-		return nil, fmt.Errorf("@i:%#v is not of type registry.ServiceConfig type", i)
+		return nil, jerrors.Errorf("@i:%#v is not of type registry.ServiceConfig type", i)
 	}
 
 	c.Lock()
@@ -323,11 +324,11 @@ func (c *consumerZookeeperRegistry) GetService(i registry.ServiceConfigIf) ([]*r
 	serviceConfIf, ok = c.services[sc.Key()]
 	c.Unlock()
 	if !ok {
-		return nil, fmt.Errorf("Service{%s} has not been registered", sc.Key())
+		return nil, jerrors.Errorf("Service{%s} has not been registered", sc.Key())
 	}
 	serviceConf, ok = serviceConfIf.(*registry.ServiceConfig)
 	if !ok {
-		return nil, fmt.Errorf("Service{%s}: failed to get serviceConfigIf type", sc.Key())
+		return nil, jerrors.Errorf("Service{%s}: failed to get serviceConfigIf type", sc.Key())
 	}
 
 	dubboPath = fmt.Sprintf("/dubbo/%s/providers", sc.Service)

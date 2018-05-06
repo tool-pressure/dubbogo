@@ -19,6 +19,7 @@ import (
 
 import (
 	log "github.com/AlexStocks/log4go"
+	jerrors "github.com/juju/errors"
 )
 
 import (
@@ -539,7 +540,7 @@ func listen(addr string, fn func(string) (net.Listener, error)) (net.Listener, e
 	}
 
 	// 仅仅是为了满足编译器检查错误需求(所有分支都有返回)
-	return nil, fmt.Errorf("unable to bind to %s", addr)
+	return nil, jerrors.Errorf("unable to bind to %s", addr)
 }
 
 func (h *httpTransport) Listen(addr string, opts ...ListenOption) (Listener, error) {

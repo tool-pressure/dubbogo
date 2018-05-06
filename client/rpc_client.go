@@ -21,6 +21,7 @@ import (
 
 import (
 	log "github.com/AlexStocks/log4go"
+	jerrors "github.com/juju/errors"
 )
 
 import (
@@ -104,7 +105,7 @@ func (c *rpcClient) newCodec(contentType string) (codec.NewCodec, error) {
 		return cf, nil
 	}
 
-	return nil, fmt.Errorf("Unsupported Content-Type: %s", contentType)
+	return nil, jerrors.Errorf("Unsupported Content-Type: %s", contentType)
 }
 
 // 流程

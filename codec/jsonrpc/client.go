@@ -2,7 +2,6 @@ package jsonrpc
 
 import (
 	"encoding/json"
-	"fmt"
 	"io"
 	"reflect"
 	"sync"
@@ -10,6 +9,7 @@ import (
 
 import (
 	log "github.com/AlexStocks/log4go"
+	jerrors "github.com/juju/errors"
 )
 
 import (
@@ -141,7 +141,7 @@ func (c *clientCodec) ReadHeader(m *codec.Message) error {
 	m.Method, ok = c.pending[c.resp.ID]
 	if !ok {
 		c.Unlock()
-		err := fmt.Errorf("can not find method of response id %v, response error:%v", c.resp.ID, c.resp.Error)
+		err := jerrors.Errorf("can not find method of response id %v, response error:%v", c.resp.ID, c.resp.Error)
 		log.Debug("clientCodec.ReadHeader(@m{%v}) = error{%v}", m, err)
 		return err
 	}
@@ -153,7 +153,7 @@ func (c *clientCodec) ReadHeader(m *codec.Message) error {
 	if c.resp.Error != nil {
 		// x, ok := c.resp.Error.(string)
 		// if !ok {
-		// 	return fmt.Errorf("invalid error %v", c.resp.Error)
+		// 	return jerrors.Errorf("invalid error %v", c.resp.Error)
 		// }
 		// if x == "" {
 		// 	x = "unspecified error"
