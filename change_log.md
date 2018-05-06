@@ -10,6 +10,11 @@ dubbogo 目前版本(0.1.1)支持的codec 是jsonrpc 2.0，transport protocol是
 ## develop list ##
 ---
 
+### 2018-05-07
+---
+- 1 fmt.Errorf -> juju/errors.Errorf
+- 2 delete ListService
+
 ### 2016-10-26 ###
 ---
 - 1 添加 github.com/AlexStocks/dubbogo-examples/calculator/java-server 作为client_test.go的mock服务端
