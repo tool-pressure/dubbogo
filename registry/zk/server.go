@@ -298,10 +298,6 @@ func (r *providerZookeeperRegistry) GetService(registry.ServiceConfigIf) ([]*reg
 	return nil, nil
 }
 
-func (r *providerZookeeperRegistry) ListServices() ([]*registry.ServiceURL, error) {
-	return nil, nil
-}
-
 func (r *providerZookeeperRegistry) Watch() (registry.Watcher, error) {
 	return nil, nil
 }
