@@ -300,7 +300,7 @@ func (c *consumerZookeeperRegistry) Watch() (registry.Watcher, error) {
 }
 
 // name: service@protocol
-func (c *consumerZookeeperRegistry) GetService(i registry.ServiceConfigIf) ([]*registry.ServiceURL, error) {
+func (c *consumerZookeeperRegistry) GetServices(i registry.ServiceConfigIf) ([]*registry.ServiceURL, error) {
 	var (
 		ok            bool
 		err           error
@@ -319,7 +319,7 @@ func (c *consumerZookeeperRegistry) GetService(i registry.ServiceConfigIf) ([]*r
 
 	c.Lock()
 	for k, v := range c.services {
-		log.Debug("(consumerZookeeperRegistry)GetService, service{%q}, serviceURL{%#v}", k, v)
+		log.Debug("(consumerZookeeperRegistry)GetServices, service{%q}, serviceURL{%#v}", k, v)
 	}
 	serviceConfIf, ok = c.services[sc.Key()]
 	c.Unlock()

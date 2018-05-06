@@ -94,10 +94,9 @@ func (c *cacheSelector) get(service string) ([]*registry.ServiceURL, error) {
 
 	// cache miss or ttl expired
 	// now ask the registry
-	ss, err := c.so.Registry.GetService(s)
+	ss, err := c.so.Registry.GetServices(s)
 	if err != nil {
-		//log.Error("registry.GetService(service{%#v}) = err{%T, %v}", serviceConf, err, err)
-		log.Error("registry.GetService(service{%#v}) = err{%T, %v}", serviceConf, err, err)
+		log.Error("registry.GetServices(service{%#v}) = err{%T, %v}", serviceConf, err, err)
 		if ok && len(services) > 0 {
 			log.Error("service{%v} timeout. can not get new service array, use old instead", serviceConf.Service)
 			return services, nil // 超时后，如果获取不到新的，就先暂用旧的

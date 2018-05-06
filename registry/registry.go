@@ -24,11 +24,11 @@ type Watcher interface {
 
 // The registry provides an interface for service discovery
 // and an abstraction over varying implementations
-// {consul, etcd, zookeeper, ...}
+// {etcd, zookeeper, ...}
 type Registry interface {
 	// Register(conf ServiceConfig) error
 	Register(conf interface{}) error
-	GetService(ServiceConfigIf) ([]*ServiceURL, error)
+	GetServices(ServiceConfigIf) ([]*ServiceURL, error)
 	Watch() (Watcher, error)
 	Close()
 	String() string

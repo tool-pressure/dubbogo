@@ -294,7 +294,7 @@ func (s *providerZookeeperRegistry) closeRegisters() {
 	s.services = nil
 }
 
-func (r *providerZookeeperRegistry) GetService(registry.ServiceConfigIf) ([]*registry.ServiceURL, error) {
+func (r *providerZookeeperRegistry) GetServices(registry.ServiceConfigIf) ([]*registry.ServiceURL, error) {
 	return nil, nil
 }
 
