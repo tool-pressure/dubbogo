@@ -134,7 +134,8 @@ LOOP:
 				z.Lock()
 				for p, a := range z.eventRegistry {
 					if strings.HasPrefix(p, event.Path) {
-						log.Info("send event{state:zk.EventNodeDataChange, Path:%s} notify event to path{%s} related watcher", event.Path, p)
+						log.Info("send event{state:zk.EventNodeDataChange, Path:%s} notify event to path{%s} related watcher",
+							event.Path, p)
 						for _, e := range a {
 							*e <- struct{}{}
 						}
@@ -187,7 +188,8 @@ func (z *zookeeperClient) unregisterEvent(zkPath string, event *chan struct{}) {
 				log.Debug("zkClient{%s} unregister event{path:%s, event:%p}", z.name, zkPath, event)
 			}
 		}
-		log.Debug("after zkClient{%s} unregister event{path:%s, event:%p}, array length %d", z.name, zkPath, event, len(a))
+		log.Debug("after zkClient{%s} unregister event{path:%s, event:%p}, array length %d",
+			z.name, zkPath, event, len(a))
 		if len(a) == 0 {
 			delete(z.eventRegistry, zkPath)
 		} else {
@@ -263,7 +265,7 @@ func (z *zookeeperClient) Create(basePath string) error {
 			if err == zk.ErrNodeExists {
 				log.Error("zk.create(\"%s\") exists\n", tmpPath)
 			} else {
-				log.Error("zk.create(\"%s\") error(%v)\n", tmpPath, err)
+				log.Error("zk.create(\"%s\") error(%v)\n", tmpPath, jerrors.ErrorStack(err))
 				return jerrors.Annotatef(err, "zk.Create(path:%s)", basePath)
 			}
 		}
@@ -305,9 +307,8 @@ func (z *zookeeperClient) RegisterTemp(basePath string, node string) (string, er
 		tmpPath, err = z.conn.Create(zkPath, data, zk.FlagEphemeral, zk.WorldACL(zk.PermAll))
 	}
 	z.Unlock()
-	// log.Debug("zookeeperClient.RegisterTemp(basePath{%s}) = tempPath{%s}", zkPath, tmpPath)
 	if err != nil {
-		log.Error("conn.Create(\"%s\", zk.FlagEphemeral) = error(%v)\n", zkPath, err)
+		log.Error("conn.Create(\"%s\", zk.FlagEphemeral) = error(%v)\n", zkPath, jerrors.ErrorStack(err))
 		// if err != zk.ErrNodeExists {
 		return "", jerrors.Annotatef(err, "zk.Create(path:%s, zk.FlagEphemeral)", basePath)
 		// }
@@ -417,7 +418,7 @@ func (z *zookeeperClient) existW(zkPath string) (<-chan zk.Event, error) {
 	}
 	z.Unlock()
 	if err != nil {
-		log.Error("zkClient{%s}.ExistsW(path{%s}) = error{%v}.", z.name, zkPath, err)
+		log.Error("zkClient{%s}.ExistsW(path{%s}) = error{%v}.", z.name, zkPath, jerrors.ErrorStack(err))
 		return nil, jerrors.Annotatef(err, "zk.ExistsW(path:%s)", zkPath)
 	}
 	if !exist {

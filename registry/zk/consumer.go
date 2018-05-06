@@ -377,27 +377,15 @@ func (c *consumerZookeeperRegistry) String() string {
 
 // 删除zk上注册的registers
 func (c *consumerZookeeperRegistry) closeRegisters() {
-	var (
-		key string
-		// err error
-	)
-
 	c.Lock()
 	log.Info("begin to close consumer zk client")
 	// 先关闭旧client，以关闭tmp node
 	c.client.Close()
 	c.client = nil
-	// for key = range c.registers {
-	// 	// log.Info("begin to delete key:%v", key)
-	// 	// err = c.client.Delete(key)
-	// 	log.Debug("delete register consumer zk path:%s, err = %v\n", key, err)
-	// 	// delete(c.registers, key)
-	// }
-	// c.registers = nil
-	for key = range c.services {
-		// 	delete(c.services, key)
-		log.Debug("delete register consumer zk path:%s", key)
-	}
+	//for key = range c.services {
+	//	// 	delete(c.services, key)
+	//	log.Debug("delete register consumer zk path:%s", key)
+	//}
 	c.services = nil
 	c.Unlock()
 }

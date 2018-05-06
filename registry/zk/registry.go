@@ -19,6 +19,7 @@ import (
 
 import (
 	log "github.com/AlexStocks/log4go"
+	jerrors "github.com/juju/errors"
 )
 
 import (
@@ -40,11 +41,11 @@ const (
 )
 
 var (
-	DubboNodes              = [...]string{"consumers", "configurators", "routers", "providers"}
-	DubboRole               = [...]string{"consumer", "", "", "provider"}
-	RegistryZkClient string = "zk registry"
-	processID               = ""
-	localIp                 = ""
+	DubboNodes       = [...]string{"consumers", "configurators", "routers", "providers"}
+	DubboRole        = [...]string{"consumer", "", "", "provider"}
+	RegistryZkClient = "zk registry"
+	processID        = ""
+	localIp          = ""
 )
 
 func init() {
@@ -106,7 +107,7 @@ func newZookeeperRegistry(opts registry.Options) (*zookeeperRegistry, error) {
 	}
 	err = r.validateZookeeperClient()
 	if err != nil {
-		return nil, err
+		return nil, jerrors.Annotate(err, "validateZookeeperClient()")
 	}
 
 	r.services = make(map[string]registry.ServiceConfigIf)
@@ -130,7 +131,7 @@ func (r *zookeeperRegistry) validateZookeeperClient() error {
 		}
 	}
 
-	return err
+	return jerrors.Annotatef(err, "newZookeeperClient(address:%+v)", r.Address)
 }
 
 func (r *zookeeperRegistry) Close() {
@@ -152,13 +153,13 @@ func (r *zookeeperRegistry) registerZookeeperNode(root string, data []byte) erro
 	err = r.client.Create(root)
 	if err != nil {
 		log.Error("zk.Create(root{%s}) = err{%v}", root, err)
-		return err
+		return jerrors.Annotatef(err, "zkclient.Create(root:%s)", root)
 	}
 	zkPath, err = r.client.RegisterTempSeq(root, data)
 	// 创建完临时节点，zkPath = /dubbo/com.ofpay.demo.api.UserProvider/consumers/jsonrpc/0000000000
 	if err != nil {
 		log.Error("createTempSeqNode(root{%s}) = error{%v}", root, err)
-		return err
+		return jerrors.Annotatef(err, "createTempSeqNode(root{%s})", root)
 	}
 	// r.registers[root] = string(data) // root = /dubbo/com.ofpay.demo.api.UserProvider/consumers/jsonrpc
 	log.Debug("create a zookeeper node:%s", zkPath)
@@ -177,11 +178,13 @@ func (r *zookeeperRegistry) registerTempZookeeperNode(root string, node string) 
 	err = r.client.Create(root)
 	if err != nil {
 		log.Error("zk.Create(root{%s}) = err{%v}", root, err)
+		return jerrors.Annotatef(err, "zk.Create(root{%s})", root)
 		return err
 	}
 	zkPath, err = r.client.RegisterTemp(root, node)
 	if err != nil {
 		log.Error("RegisterTempNode(root{%s}, node{%s}) = error{%v}", root, node, err)
+		return jerrors.Annotatef(err, "RegisterTempNode(root{%s}, node{%s})", root, node)
 		return err
 	}
 	// r.registers[zkPath] = ""

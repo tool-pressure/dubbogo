@@ -78,7 +78,7 @@ func (s *providerZookeeperRegistry) validateZookeeperClient() error {
 	}
 	s.Unlock()
 
-	return err
+	return jerrors.Annotatef(err, "newZookeeperClient(ProviderRegistryZkClient, addr:%+v)", s.Address)
 }
 
 func (s *providerZookeeperRegistry) Register(c interface{}) error {
@@ -105,7 +105,7 @@ func (s *providerZookeeperRegistry) Register(c interface{}) error {
 
 	err = s.register(&conf)
 	if err != nil {
-		return err
+		return jerrors.Annotatef(err, "register(conf:%+v)", conf)
 	}
 
 	s.Lock()
@@ -142,7 +142,7 @@ func (s *providerZookeeperRegistry) register(conf *registry.ProviderServiceConfi
 	s.Unlock()
 	if err != nil {
 		log.Error("zkClient.create(path{%s}) = error{%v}", dubboPath, err)
-		return err
+		return jerrors.Annotatef(err, "zkclient.Create(path:%s)", dubboPath)
 	}
 
 	params = url.Values{}
@@ -194,7 +194,7 @@ func (s *providerZookeeperRegistry) register(conf *registry.ProviderServiceConfi
 	err = s.registerTempZookeeperNode(dubboPath, encodedURL)
 	log.Debug("provider path:%s, url:%s", dubboPath, rawURL)
 	if err != nil {
-		return err
+		return jerrors.Annotatef(err, "registerTempZookeeperNode(path:%s, url:%s)", dubboPath, rawURL)
 	}
 
 	return nil
@@ -281,16 +281,10 @@ func (s *providerZookeeperRegistry) closeRegisters() {
 	// 先关闭旧client，以关闭tmp node
 	s.client.Close()
 	s.client = nil
-	// for key = range s.registers {
-	// 	log.Debug("delete register provider zk path:%s, err = %v\n", key, err)
-	// 	// do not delete related zk path, 'cause it's a temp zk node path
-	// 	// delete(s.registers, key)
-	// }
-	// s.registers = nil
-	for key = range s.services {
-		log.Debug("delete register provider zk path:%s", key)
-		// 	delete(s.services, key)
-	}
+	//for key = range s.services {
+	//	log.Debug("delete register provider zk path:%s", key)
+	//	// 	delete(s.services, key)
+	//}
 	s.services = nil
 }
 

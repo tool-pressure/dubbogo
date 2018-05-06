@@ -19,6 +19,7 @@ import (
 
 import (
 	log "github.com/AlexStocks/log4go"
+	jerrors "github.com/juju/errors"
 	"github.com/samuel/go-zookeeper/zk"
 )
 
@@ -101,7 +102,8 @@ func (w *zookeeperWatcher) handleZkNodeEvent(zkPath string, children []string, c
 	)
 	newChildren, err = w.client.getChildren(zkPath)
 	if err != nil {
-		log.Error("path{%s} child nodes changed, zk.Children(path{%s} = error{%v}", zkPath, zkPath, err)
+		log.Error("path{%s} child nodes changed, zk.Children(path{%s} = error{%v}",
+			zkPath, zkPath, jerrors.ErrorStack(err))
 		return
 	}
 
@@ -119,7 +121,7 @@ func (w *zookeeperWatcher) handleZkNodeEvent(zkPath string, children []string, c
 		log.Info("add zkNode{%s}", newNode)
 		serviceURL, err = registry.NewServiceURL(n)
 		if err != nil {
-			log.Error("NewServiceURL(%s) = error{%v}", n, err)
+			log.Error("NewServiceURL(%s) = error{%v}", n, jerrors.ErrorStack(err))
 			continue
 		}
 		if !conf.ServiceEqual(serviceURL) {
@@ -159,7 +161,7 @@ func (w *zookeeperWatcher) handleZkNodeEvent(zkPath string, children []string, c
 		}
 		log.Warn("delete serviceURL{%#v}", serviceURL)
 		if err != nil {
-			log.Error("NewServiceURL(i{%s}) = error{%v}", n, err)
+			log.Error("NewServiceURL(i{%s}) = error{%v}", n, jerrors.ErrorStack(err))
 			continue
 		}
 		w.events <- event{&registry.Result{registry.ServiceURLDel, serviceURL}, nil}
