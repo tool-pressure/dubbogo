@@ -18,6 +18,7 @@ import (
 )
 
 import (
+	"github.com/AlexStocks/dubbogo/registry"
 	log "github.com/AlexStocks/log4go"
 )
 
@@ -63,12 +64,11 @@ func (r *rpcStream) Send(msg interface{}) error {
 	r.seq++
 
 	req := request{
-		Service:       r.request.Service(),
+		Service:       r.request.ServiceConfig().(*registry.ServiceConfig).Service,
 		Seq:           seq,
 		ServiceMethod: r.request.Method(),
 	}
 
-	// fmt.Printf("rpc stream request:%#v, codec:%#v\n", req, r.codec)
 	if err := r.codec.WriteRequest(&req, msg); err != nil {
 		r.err = err
 		return err

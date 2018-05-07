@@ -239,7 +239,7 @@ func (c *rpcClient) Call(ctx context.Context, request Request, response interfac
 	}
 
 	// get next nodes from the selector
-	next, err := c.opts.Selector.Select(request.Service())
+	next, err := c.opts.Selector.Select(request.ServiceConfig())
 	if err != nil {
 		log.Error("selector.Select(request{%#v}) = error{%#v}", request, err)
 		if err == selector.ErrNotFound {
@@ -286,7 +286,6 @@ func (c *rpcClient) Call(ctx context.Context, request Request, response interfac
 		err = c.call(reqID, ctx, address, serviceURL.Path, request, response, callOpts)
 		log.Debug("@i{%d}, call(ID{%v}, ctx{%v}, address{%v}, path{%v}, request{%v}, response{%v}) = err{%v}",
 			i, reqID, ctx, address, serviceURL.Path, request, response, err)
-		c.opts.Selector.Mark(request.Service(), serviceURL, err)
 		return err
 	}
 
@@ -395,7 +394,7 @@ func (c *rpcClient) Stream(ctx context.Context, request Request, opts ...CallOpt
 	}
 
 	// get next nodes from the selector
-	next, err := c.opts.Selector.Select(request.Service())
+	next, err := c.opts.Selector.Select(request.ServiceConfig())
 	if err != nil {
 		log.Error("selector.Select(request{%#v}) = error{%#v}", request, err)
 		if err == selector.ErrNotFound {
@@ -445,7 +444,6 @@ func (c *rpcClient) Stream(ctx context.Context, request Request, opts ...CallOpt
 		stream, err := c.stream(reqID, ctx, address, serviceURL.Path, request, callOpts)
 		log.Debug("@i{%d}, call(ID{%v}, ctx{%v}, address{%v}, path{%v}, request{%v}) = err{%v}",
 			i, reqID, ctx, address, serviceURL.Path, request, err)
-		c.opts.Selector.Mark(request.Service(), serviceURL, err)
 
 		return stream, err
 	}
@@ -505,7 +503,7 @@ func (c *rpcClient) Options() Options {
 }
 
 func (c *rpcClient) NewJsonRequest(service string, method string, request interface{}, reqOpts ...RequestOption) Request {
-	return newRpcRequest(service, method, request, "application/json", reqOpts...)
+	return newRpcRequest("jsonrpc", service, method, request, "application/json", reqOpts...)
 }
 
 func (c *rpcClient) String() string {

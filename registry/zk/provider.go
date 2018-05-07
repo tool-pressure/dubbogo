@@ -270,11 +270,6 @@ func (s *providerZookeeperRegistry) String() string {
 }
 
 func (s *providerZookeeperRegistry) closeRegisters() {
-	var (
-		// err error
-		key string
-	)
-
 	s.Lock()
 	defer s.Unlock()
 	log.Info("begin to close provider zk client")

@@ -2,16 +2,11 @@ package registry
 
 import (
 	"errors"
-	"fmt"
 )
 
 // Result is returned by a call to Next on
 // the watcher. Actions can be create, update, delete
-type Result ServiceURLEvent
-
-func (r Result) String() string {
-	return fmt.Sprintf("Result{Action{%s}, Service{%#v}}", r.Action.String(), r.Service)
-}
+type Result = ServiceURLEvent
 
 // Watcher is an interface that returns updates
 // about services within the registry.

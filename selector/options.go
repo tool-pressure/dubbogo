@@ -1,7 +1,6 @@
 package selector
 
 import (
-	// "golang.org/x/net/context"
 	"context"
 )
 

@@ -7,6 +7,7 @@ import (
 
 import (
 	log "github.com/AlexStocks/log4go"
+	jerrors "github.com/juju/errors"
 )
 
 import (
@@ -15,14 +16,10 @@ import (
 	"github.com/AlexStocks/dubbogo/selector"
 )
 
-const (
-	SERVICE_WEIGHT = 10
-)
-
 var (
 	// selector每DefaultTTL分钟通过tick函数清空cache或者get函数去清空某个service的cache，
 	// 以全量获取某个service的所有providers
-	DefaultTTL = 5 * time.Minute
+	DefaultTTL = 10 * time.Minute
 )
 
 /*
@@ -52,10 +49,10 @@ func (c *cacheSelector) quit() bool {
 	}
 }
 
-// cp copies a service. Because we're caching handing back pointers would
+// copy copies a service. Because we're caching handing back pointers would
 // create a race condition, so we do this instead its fast enough
 // 这个函数会被下面的get函数调用，get调用期间会启用lock
-func (c *cacheSelector) cp(current []*registry.ServiceURL) []*registry.ServiceURL {
+func (c *cacheSelector) copy(current []*registry.ServiceURL) []*registry.ServiceURL {
 	var services []*registry.ServiceURL
 
 	for _, service := range current {
@@ -66,29 +63,26 @@ func (c *cacheSelector) cp(current []*registry.ServiceURL) []*registry.ServiceUR
 	return services
 }
 
-//func (c *cacheSelector) get(s registry.ServiceConfigIf) ([]*registry.ServiceURL, error) {
-func (c *cacheSelector) get(service string) ([]*registry.ServiceURL, error) {
+func (c *cacheSelector) get(s registry.ServiceConfigIf) ([]*registry.ServiceURL, error) {
 	c.Lock()
 	defer c.Unlock()
 
 	// check the cache first
-	//serviceConf, _ := s.(registry.ServiceConfig)
-	//services, ok := c.cache[serviceConf.Service]
-	services, ok := c.cache[service]
-	//ttl, kk := c.ttls[serviceConf.Service]
-	ttl, kk := c.ttls[service]
+	serviceConf, _ := s.(registry.ServiceConfig)
+	services, o := c.cache[serviceConf.Service]
+	ttl, k := c.ttls[serviceConf.Service]
 	// log.Debug("c.cache[service{%v}] = services{%v}", serviceConf.Service, services)
-	log.Debug("c.cache[service{%v}] = services{%v}", service, services)
+	log.Debug("c.cache[service{%v}] = services{%v}", serviceConf, services)
 
 	// got results, copy and return
-	if ok && len(services) > 0 {
+	if o && len(services) > 0 {
 		// only return if its less than the ttl
 		// 拷贝services的内容，防止发生add/del event时影响results内容
-		if kk && time.Since(ttl) < c.ttl {
-			return c.cp(services), nil
+		if k && time.Since(ttl) < c.ttl {
+			return c.copy(services), nil
 		}
-		log.Warn("c.cache[service{%v}] = services{%v}, array ttl{%v} is less than cache.ttl{%v}",
-			service, services, ttl, c.ttl)
+		log.Warn("c.cache[serviceconf:%+v] = services:{%+v}, array ttl:{%+v} is less than cache.ttl:{%+v}",
+			serviceConf, services, ttl, c.ttl)
 		//serviceConf.Service, services, ttl, c.ttl)
 	}
 
@@ -96,16 +90,16 @@ func (c *cacheSelector) get(service string) ([]*registry.ServiceURL, error) {
 	// now ask the registry
 	ss, err := c.so.Registry.GetServices(s)
 	if err != nil {
-		log.Error("registry.GetServices(service{%#v}) = err{%T, %v}", serviceConf, err, err)
-		if ok && len(services) > 0 {
+		log.Error("registry.GetServices(service{%#v}) = err{%v}", serviceConf, jerrors.ErrorStack(err))
+		if o && len(services) > 0 {
 			log.Error("service{%v} timeout. can not get new service array, use old instead", serviceConf.Service)
 			return services, nil // 超时后，如果获取不到新的，就先暂用旧的
 		}
-		return nil, err
+		return nil, jerrors.Annotatef(err, "cacheSelect.get(serviceConfig:%+v)", serviceConf)
 	}
 
 	// we didn't have any results so cache
-	c.cache[serviceConf.Service] = c.cp(ss)
+	c.cache[serviceConf.Service] = c.copy(ss)
 	c.ttls[serviceConf.Service] = time.Now().Add(c.ttl)
 	return ss, nil
 }
@@ -123,7 +117,7 @@ func (c *cacheSelector) set(service string, services []*registry.ServiceURL) {
 	delete(c.ttls, service)
 }
 
-func ArrayRemoveAt(array *[]*registry.ServiceURL, i int) {
+func filterServices(array *[]*registry.ServiceURL, i int) {
 	if i < 0 {
 		return
 	}
@@ -142,20 +136,21 @@ func (c *cacheSelector) update(res *registry.Result) {
 	}
 	var (
 		ok       bool
-		services []*registry.ServiceURL
 		sname    string
+		services []*registry.ServiceURL
 	)
 
 	log.Debug("update @registry result{%s}", res)
-	sname = res.Service.Query.Get("interface")
+	sname = res.Service.ServiceConfig().Key()
 	c.Lock()
+	defer c.Unlock()
 	services, ok = c.cache[sname]
 	log.Debug("service name:%s, its current member lists:%+v", sname, services)
 	if ok { // existing service found
 		for i, s := range services {
 			log.Debug("cache.services[%s][%d] = service{%#v}", sname, i, s)
 			if s.PrimitiveURL == res.Service.PrimitiveURL {
-				ArrayRemoveAt(&(services), i)
+				filterServices(&(services), i)
 			}
 		}
 	}
@@ -168,14 +163,13 @@ func (c *cacheSelector) update(res *registry.Result) {
 		log.Error("selector delete serviceURL{%#v}", *res.Service)
 	}
 	c.set(sname, services)
-	services, ok = c.cache[sname]
-	log.Debug("after update, cache.services[%s] member list size{%d}", sname, len(services))
+	//services, ok = c.cache[sname]
+	log.Debug("after update, cache.services[%s] member list size{%d}", sname, len(c.cache[sname]))
 	// if ok { // debug
 	// 	for i, s := range services {
 	// 		log.Debug("cache.services[%s][%d] = service{%#v}", sname, i, s)
 	// 	}
 	// }
-	c.Unlock()
 }
 
 // run starts the cache watcher loop
@@ -196,13 +190,13 @@ func (c *cacheSelector) run() {
 		// create new watcher
 		// 创建新watch，走到这一步要么第第一次for循环进来，要么是watch函数出错。watch出错说明registry.watch的zk client与zk连接出现了问题
 		w, err := c.so.Registry.Watch()
-		log.Debug("cache.Registry.Watch() = watch{%#v}, error{%#v}", w, err)
+		log.Debug("cache.Registry.Watch() = watch{%#v}, error{%#v}", w, jerrors.ErrorStack(err))
 		if err != nil {
 			if c.quit() {
 				log.Warn("(cacheSelector)run() quit now")
 				return
 			}
-			log.Warn("cacheSelector.Registry.Watch() = error{%v}", err)
+			log.Warn("cacheSelector.Registry.Watch() = error{%v}", jerrors.ErrorStack(err))
 			time.Sleep(common.TimeSecondDuration(registry.REGISTRY_CONN_DELAY))
 			continue
 		}
@@ -211,9 +205,9 @@ func (c *cacheSelector) run() {
 		// 除非watch遇到错误，否则watch函数内部的for循环一直运行下午，run函数的for循环也会一直卡在watch函数上
 		// watch一旦退出，就会执行registry.Watch().Stop, 相应的client就会无效
 		err = c.watch(w)
-		log.Debug("cache.watch(w) = err{%#v}", err)
+		log.Debug("cache.watch(w) = err{%#+v}", jerrors.ErrorStack(err))
 		if err != nil {
-			log.Warn("cacheSelector.watch() = error{%v}", err)
+			log.Warn("cacheSelector.watch() = error{%v}", jerrors.ErrorStack(err))
 			time.Sleep(common.TimeSecondDuration(registry.REGISTRY_CONN_DELAY))
 			continue
 		}
@@ -252,7 +246,7 @@ func (c *cacheSelector) watch(w registry.Watcher) error {
 		res, err = w.Next()
 		log.Debug("watch.Next() = result{%s}, error{%#v}", res, err)
 		if err != nil {
-			return err
+			return jerrors.Trace(err)
 		}
 		if res.Action == registry.ServiceURLDel && !w.Valid() {
 			// consumer与registry连接中断的情况下，为了服务的稳定不删除任何provider
@@ -280,13 +274,13 @@ func (c *cacheSelector) Select(service registry.ServiceConfigIf) (selector.Next,
 	services, err = c.get(service)
 	log.Debug("get(service{%s} = serviceURL array{%#v})", service, services)
 	if err != nil {
-		log.Error("cache.get(service{%s}) = error{%T-%v}", service, err, err)
+		log.Error("cache.get(service{%s}) = error{%+v}", service, jerrors.ErrorStack(err))
 		// return nil, err
 		return nil, selector.ErrNotFound
 	}
-	for i, s := range services {
-		log.Debug("services[%d] = serviceURL{%#v}", i, s)
-	}
+	// for i, s := range services {
+	//	log.Debug("services[%d] = serviceURL{%#v}", i, s)
+	// }
 	// if there's nothing left, return
 	if len(services) == 0 {
 		return nil, selector.ErrNoneAvailable
@@ -303,7 +297,7 @@ func (c *cacheSelector) Close() error {
 	c.Unlock()
 
 	select {
-	case <-c.exit: // 这里这个技巧非常好，检测是否已经close了c.exit
+	case <-c.exit:
 		return nil
 	default:
 		close(c.exit)
@@ -321,7 +315,7 @@ func (c *cacheSelector) String() string {
 //
 // 而Close则是发出stop信号，停掉watch，清算破产
 //
-// registor自身主要向selector暴露了watch功能
+// register自身主要向selector暴露了watch功能
 func NewSelector(opts ...selector.Option) selector.Selector {
 	sopts := selector.Options{
 		Mode: selector.SM_Random,

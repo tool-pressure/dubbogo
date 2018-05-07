@@ -8,9 +8,9 @@ import (
 	"github.com/AlexStocks/dubbogo/registry"
 )
 
-// Selector builds on the registry as a mechanism to pick nodes
-// and mark their status. This allows host pools and other things
-// to be built using various algorithms.
+// Selector builds on the registry as a mechanism to pick nodes.
+// This allows host pools and other things to be built using
+// various algorithms.
 type Selector interface {
 	Options() Options
 	// Select returns a function which should return the next node

@@ -15,6 +15,10 @@ import (
 	"time"
 )
 
+import (
+	"github.com/AlexStocks/dubbogo/registry"
+)
+
 // Client is the interface used to make requests to services.
 // It supports Request/Response via Transport and Publishing via the Broker.
 // It also supports bidirectional streaming of requests.
@@ -30,7 +34,7 @@ type Client interface {
 // Request is the interface for a synchronous request used by Call or Stream
 type Request interface {
 	Protocol() string
-	Service() string
+	ServiceConfig() registry.ServiceConfigIf
 	Method() string
 	ContentType() string
 	Request() interface{}

@@ -112,10 +112,11 @@ func NewServiceURL(urlString string) (*ServiceURL, error) {
 	return s, nil
 }
 
-func (s *ServiceConfig) ServiceConfig() *ServiceConfig {
-	return &ServiceConfig{
+func (s *ServiceURL) ServiceConfig() ServiceConfig {
+	interfaceName := s.Query.Get("interface")
+	return ServiceConfig{
 		Protocol: s.Protocol,
-		Service:  s.Service,
+		Service:  interfaceName,
 		Group:    s.Group,
 		Version:  s.Version,
 	}

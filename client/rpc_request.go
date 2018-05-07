@@ -10,6 +10,10 @@
 
 package client
 
+import (
+	"github.com/AlexStocks/dubbogo/registry"
+)
+
 type rpcRequest struct {
 	protocol    string
 	service     string
@@ -44,8 +48,11 @@ func (r *rpcRequest) ContentType() string {
 	return r.contentType
 }
 
-func (r *rpcRequest) Service() string {
-	return r.service
+func (r *rpcRequest) ServiceConfig() registry.ServiceConfigIf {
+	return &registry.ServiceConfig{
+		Protocol: r.protocol,
+		Service:  r.service,
+	}
 }
 
 func (r *rpcRequest) Method() string {

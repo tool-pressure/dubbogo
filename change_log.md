@@ -13,12 +13,9 @@ dubbogo 目前版本(0.1.1)支持的codec 是jsonrpc 2.0，transport protocol是
 ### 2018-05-07
 ---
 - 1 fmt.Errorf -> juju/errors.Errorf
-
 - 2 delete ListService
-
 - 3 Registry.GetService -> Registry.GetServices
-
-  
+- 4 use ServiceConfigIf in selector.Select()
 
 ### 2016-10-26 ###
 ---
