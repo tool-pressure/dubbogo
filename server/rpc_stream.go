@@ -14,7 +14,6 @@ import (
 	"context"
 	"log"
 	"sync"
-	// "golang.org/x/net/context"
 )
 
 // Implements the Streamer interface

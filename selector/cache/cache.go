@@ -272,9 +272,9 @@ func (c *cacheSelector) Select(service registry.ServiceConfigIf) (selector.Next,
 	// try the cache first
 	// if that fails go directly to the registry
 	services, err = c.get(service)
-	log.Debug("get(service{%s} = serviceURL array{%#v})", service, services)
+	log.Debug("get(service{%+v} = serviceURL array{%#v})", service, services)
 	if err != nil {
-		log.Error("cache.get(service{%s}) = error{%+v}", service, jerrors.ErrorStack(err))
+		log.Error("cache.get(service{%+v}) = error{%+v}", service, jerrors.ErrorStack(err))
 		// return nil, err
 		return nil, selector.ErrNotFound
 	}

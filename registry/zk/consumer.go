@@ -308,11 +308,11 @@ func (c *consumerZookeeperRegistry) GetServices(i registry.ServiceConfigIf) ([]*
 		nodes         []string
 		serviceURL    *registry.ServiceURL
 		serviceConfIf registry.ServiceConfigIf
-		sc            registry.ServiceConfig
+		sc            *registry.ServiceConfig
 		serviceConf   *registry.ServiceConfig
 	)
 
-	sc, ok = i.(registry.ServiceConfig)
+	sc, ok = i.(*registry.ServiceConfig)
 	if !ok {
 		return nil, jerrors.Errorf("@i:%#v is not of type registry.ServiceConfig type", i)
 	}

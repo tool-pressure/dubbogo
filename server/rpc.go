@@ -12,7 +12,6 @@ package server
 
 import (
 	"context"
-	// "golang.org/x/net/context"
 )
 
 // Handler interface represents a Service request handler. It's generated

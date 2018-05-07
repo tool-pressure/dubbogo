@@ -19,7 +19,6 @@ import (
 	"sync"
 	"unicode"
 	"unicode/utf8"
-	// "golang.org/x/net/context"
 )
 
 import (

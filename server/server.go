@@ -12,20 +12,15 @@ package server
 
 import (
 	"context"
-	"fmt"
 	"runtime/debug"
 	"strconv"
 	"sync"
 	"time"
-	// "golang.org/x/net/context"
-)
-
-import (
-	jerrors "github.com/juju/errors"
 )
 
 import (
 	log "github.com/AlexStocks/log4go"
+	jerrors "github.com/juju/errors"
 )
 
 import (
