@@ -12,7 +12,6 @@ package hessian
 
 import (
 	"bytes"
-	"fmt"
 	"io"
 )
 
