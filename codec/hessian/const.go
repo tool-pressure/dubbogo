@@ -1,3 +1,11 @@
+/******************************************************
+# DESC    : constant vars
+# AUTHOR  : Alex Stocks
+# EMAIL   : alexstocks@foxmail.com
+# MOD     : 2016-08-22 21:23
+# FILE    : const.go
+******************************************************/
+
 package hessian
 
 const (

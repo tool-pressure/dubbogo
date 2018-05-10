@@ -14,28 +14,41 @@ package codec
 // transport network
 //////////////////////////////////////////
 
-type NetworkType int
+type TransportType int
 
 const (
-	NETWORK_TYPE_BEGIN NetworkType = iota
-	TCP
-	HTTP
-	NETWORK_TYPE_END
+	TRANSPORTTYPE_BEGIN TransportType = iota
+	TRANSPORT_TCP
+	TRANSPORT_HTTP
+	TRANSPORTTYPE_UNKNOWN
 )
 
-var networkTypeStrings = [...]string{
-	"NETWORK_TYPE_BEGIN",
+var transportTypeStrings = [...]string{
+	"",
 	"TCP",
 	"HTTP",
-	"NETWORK_TYPE_END",
+	"",
 }
 
-func (this NetworkType) String() string {
-	if NETWORK_TYPE_BEGIN < this && this < NETWORK_TYPE_END {
-		return networkTypeStrings[this]
+func (t TransportType) String() string {
+	if TRANSPORTTYPE_BEGIN < t && t < TRANSPORTTYPE_UNKNOWN {
+		return transportTypeStrings[t]
 	}
 
 	return ""
+}
+
+func GetTransportType(t string) TransportType {
+	var typ = TRANSPORTTYPE_UNKNOWN
+
+	for i := TRANSPORTTYPE_BEGIN + 1; i < TRANSPORTTYPE_UNKNOWN; i++ {
+		if transportTypeStrings[i] == t {
+			typ = TransportType(i)
+			break
+		}
+	}
+
+	return typ
 }
 
 //////////////////////////////////////////
@@ -45,15 +58,36 @@ func (this NetworkType) String() string {
 type CodecType int
 
 const (
-	JSONRPC CodecType = iota
-	DUBBO
+	CODECTYPE_BEGIN CodecType = iota
+	CODECTYPE_JSONRPC
+	CODECTYPE_DUBBO
+	CODECTYPE_UNKNOWN
 )
 
 var codecTypeStrings = [...]string{
+	"",
 	"jsonrpc",
 	"dubbo",
+	"",
 }
 
 func (c CodecType) String() string {
-	return codecTypeStrings[c]
+	if CODECTYPE_BEGIN < c && c < CODECTYPE_UNKNOWN {
+		return codecTypeStrings[c]
+	}
+
+	return ""
+}
+
+func GetCodecType(t string) CodecType {
+	var typ = CODECTYPE_UNKNOWN
+
+	for i := CODECTYPE_BEGIN + 1; i < CODECTYPE_UNKNOWN; i++ {
+		if codecTypeStrings[i] == t {
+			typ = CodecType(i)
+			break
+		}
+	}
+
+	return typ
 }

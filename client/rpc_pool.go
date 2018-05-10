@@ -21,6 +21,7 @@ import (
 
 import (
 	"github.com/AlexStocks/dubbogo/transport"
+	"strings"
 )
 
 type poolConn struct {
@@ -30,8 +31,7 @@ type poolConn struct {
 }
 
 func (p *poolConn) Close() error {
-	// log.Debug("close poolConn{%#v}", p)
-	var err error = jerrors.Errorf("close poolConn{%#v} again", p)
+	err := jerrors.Errorf("close poolConn{%#v} again", p)
 	p.once.Do(func() {
 		p.Client.Close()
 		p.created = 0
@@ -56,25 +56,29 @@ func newPool(size int, ttl time.Duration) *pool {
 	}
 }
 
-func (p *pool) getConn(addr string, tr transport.Transport, opts ...transport.DialOption) (*poolConn, error) {
+func (p *pool) getConn(protocol, addr string, tr transport.Transport, opts ...transport.DialOption) (*poolConn, error) {
 	p.Lock()
-	conns := p.conns[addr]
+	var builder strings.Builder
+
+	builder.WriteString(addr)
+	builder.WriteString("@")
+	builder.WriteString(protocol)
+
+	key := builder.String()
+
+	conns := p.conns[key]
 	now := time.Now().Unix()
 
-	// while we have conns check age and then return one
-	// otherwise we'll create a new conn
 	for len(conns) > 0 {
 		conn := conns[len(conns)-1]
-		conns = conns[:len(conns)-1] // 非常好的删除最后一个element的技巧
-		p.conns[addr] = conns
+		conns = conns[:len(conns)-1]
+		p.conns[key] = conns
 
-		// if conn is old kill it and move on
 		if d := now - conn.created; d > p.ttl {
 			conn.Client.Close()
 			continue
 		}
 
-		// we got a good conn, lets unlock and return it
 		p.Unlock()
 
 		return conn, nil
@@ -83,33 +87,42 @@ func (p *pool) getConn(addr string, tr transport.Transport, opts ...transport.Di
 	p.Unlock()
 
 	// create new conn
-	// Dial函数是DefaultTransport.Dial，而DefaultTransport = newHTTPTransport()，
-	// 所以返回的client实际是httpTransportClient
+	// if @tr is httpTransport, then c is httpTransportClient.
+	// if @tr is tcpTransport, then c is tcpTransportClient.
 	c, err := tr.Dial(addr, opts...)
 	if err != nil {
-		return nil, err
+		return nil, jerrors.Trace(err)
 	}
 	return &poolConn{&sync.Once{}, c, time.Now().Unix()}, nil
 }
 
-func (p *pool) release(addr string, conn *poolConn, err error) {
+func (p *pool) release(protocol, addr string, conn *poolConn, err error) {
 	if conn == nil || conn.created == 0 {
 		return
 	}
-	// don't store the conn if it has errored
+
+	// don't store the conn if it has error
 	if err != nil {
 		conn.Close() // 须经过(poolConn)Close，以防止多次close transport client
 		return
 	}
 
+	var builder strings.Builder
+
+	builder.WriteString(addr)
+	builder.WriteString("@")
+	builder.WriteString(protocol)
+
+	key := builder.String()
+
 	// otherwise put it back for reuse
 	p.Lock()
-	conns := p.conns[addr]
+	conns := p.conns[key]
 	if len(conns) >= p.size {
 		p.Unlock()
 		conn.Client.Close()
 		return
 	}
-	p.conns[addr] = append(conns, conn)
+	p.conns[key] = append(conns, conn)
 	p.Unlock()
 }

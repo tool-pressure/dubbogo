@@ -51,10 +51,8 @@ type CallOptions struct {
 	Retries int
 	// Request/Response timeout
 	RequestTimeout time.Duration
-
-	// Other options for implementations of the interface
-	// can be stored in a context
-	Context context.Context
+	// cache selector address
+	Next selector.Next
 }
 
 // WithDialTimeout is a CallOption which overrides that which
@@ -87,10 +85,10 @@ func WithRequestTimeout(d time.Duration) CallOption {
 
 type Options struct {
 	// Used to select codec
-	ContentType string
+	CodecType codec.CodecType
 
 	// Plugged interfaces
-	Codecs    map[string]codec.NewCodec
+	newCodec  codec.NewCodec
 	Registry  registry.Registry
 	Selector  selector.Selector
 	Transport transport.Transport
@@ -109,7 +107,6 @@ type Options struct {
 
 func newOptions(options ...Option) Options {
 	opts := Options{
-		Codecs: make(map[string]codec.NewCodec),
 		CallOptions: CallOptions{
 			Retries:        DefaultRetries,
 			RequestTimeout: DefaultRequestTimeout,
@@ -131,24 +128,20 @@ func newOptions(options ...Option) Options {
 		panic("client.Options.Selector is nil")
 	}
 
-	if len(opts.ContentType) == 0 {
-		opts.ContentType = defaultContentType
+	if len(opts.CodecType.String()) == 0 {
+		panic("client.Options.CodecType is nil")
 	}
+
+	opts.newCodec = dubbogoClientConfigMap[opts.CodecType].newCodec
+	opts.Transport = dubbogoClientConfigMap[opts.CodecType].newTransport()
 
 	return opts
 }
 
-// Codec to be used to encode/decode requests for a given content type
-func Codec(contentType string, c codec.NewCodec) Option {
-	return func(o *Options) {
-		o.Codecs[contentType] = c
-	}
-}
-
 // Default content type of the client
-func ContentType(ct string) Option {
+func CodecType(t codec.CodecType) Option {
 	return func(o *Options) {
-		o.ContentType = ct
+		o.CodecType = t
 	}
 }
 

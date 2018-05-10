@@ -10,10 +10,10 @@ type Message struct {
 	Body   []byte
 }
 
-func (this *Message) Reset() {
-	this.Body = this.Body[:0]
-	for key := range this.Header {
-		delete(this.Header, key)
+func (m *Message) Reset() {
+	m.Body = m.Body[:0]
+	for key := range m.Header {
+		delete(m.Header, key)
 	}
 }
 
@@ -39,19 +39,22 @@ type Listener interface {
 }
 
 // Transport is an interface which is used for communication between
-// services. It uses socket send/recv semantics and had various
-// implementations {HTTP, RabbitMQ, NATS, ...}
+// services. It uses socket send/recv semantics.
 type Transport interface {
 	Dial(addr string, opts ...DialOption) (Client, error)
 	Listen(addr string, opts ...ListenOption) (Listener, error)
 	String() string
 }
 
-type Option func(*Options)
+type (
+	Option func(*Options)
 
-type DialOption func(*DialOptions)
+	DialOption func(*DialOptions)
 
-type ListenOption func(*ListenOptions)
+	ListenOption func(*ListenOptions)
+
+	NewTransport func(...Option) Transport
+)
 
 var (
 	DefaultDialTimeout = time.Second * 5

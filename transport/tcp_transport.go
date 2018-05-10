@@ -21,6 +21,7 @@ import (
 
 import (
 	log "github.com/AlexStocks/log4go"
+	jerrors "github.com/juju/errors"
 )
 
 import (
@@ -63,10 +64,10 @@ func (t *tcpTransportClient) Send(m *Message) error {
 		defer common.SetNetConnTimeout(t.conn, 0)
 	}
 	if err := t.enc.Encode(m); err != nil {
-		return err
+		return jerrors.Trace(err)
 	}
 
-	return t.encBuf.Flush()
+	return jerrors.Trace(t.encBuf.Flush())
 }
 
 func (t *tcpTransportClient) Recv(m *Message) error {
@@ -75,11 +76,11 @@ func (t *tcpTransportClient) Recv(m *Message) error {
 		defer common.SetNetConnTimeout(t.conn, 0)
 	}
 
-	return t.dec.Decode(&m)
+	return jerrors.Trace(t.dec.Decode(&m))
 }
 
 func (t *tcpTransportClient) Close() error {
-	return t.conn.Close()
+	return jerrors.Trace(t.conn.Close())
 }
 
 //////////////////////////////////////////////
@@ -125,7 +126,7 @@ func (t *tcpTransportSocket) Recv(m *Message) error {
 		defer common.SetNetConnTimeout(t.conn, 0)
 	}
 
-	return t.dec.Decode(&m)
+	return jerrors.Trace(t.dec.Decode(&m))
 }
 
 func (t *tcpTransportSocket) Send(m *Message) error {
@@ -135,13 +136,13 @@ func (t *tcpTransportSocket) Send(m *Message) error {
 		defer common.SetNetConnTimeout(t.conn, 0)
 	}
 	if err := t.enc.Encode(m); err != nil {
-		return err
+		return jerrors.Trace(err)
 	}
-	return t.encBuf.Flush()
+	return jerrors.Trace(t.encBuf.Flush())
 }
 
 func (t *tcpTransportSocket) Close() error {
-	return t.conn.Close()
+	return jerrors.Trace(t.conn.Close())
 }
 
 func (t *tcpTransportSocket) LocalAddr() net.Addr {
@@ -208,7 +209,7 @@ func (t *tcpTransportListener) Accept(fn func(Socket)) error {
 				time.Sleep(tempDelay)
 				continue
 			}
-			return err
+			return jerrors.Trace(err)
 		}
 
 		if tcpConn, ok := c.(*net.TCPConn); ok {
@@ -218,7 +219,7 @@ func (t *tcpTransportListener) Accept(fn func(Socket)) error {
 
 		sock := initTcpTransportSocket(t.t, c, t.release)
 
-		common.GoroutinePool.Go(func() {
+		go func() {
 			defer func() {
 				if r := recover(); r != nil {
 					const size = 64 << 10
@@ -230,7 +231,7 @@ func (t *tcpTransportListener) Accept(fn func(Socket)) error {
 			}()
 
 			fn(sock) // rpcServer:handlePkg 函数里面有一个defer语句段，保证了正常退出的情况下sock.Close()
-		})
+		}()
 	}
 }
 
@@ -253,7 +254,7 @@ func (t *tcpTransport) Dial(addr string, opts ...DialOption) (Client, error) {
 
 	conn, err := net.DialTimeout("tcp", addr, dopts.Timeout)
 	if err != nil {
-		return nil, err
+		return nil, jerrors.Trace(err)
 	}
 
 	return initTcpTransportClient(t, conn, dopts), nil
@@ -270,11 +271,7 @@ func (t *tcpTransport) Listen(addr string, opts ...ListenOption) (Listener, erro
 	}
 	l, err := listen(addr, fn)
 	if err != nil {
-		return nil, err
-	}
-
-	if err != nil {
-		return nil, err
+		return nil, jerrors.Trace(err)
 	}
 
 	return initTcpTransportListener(t, l), nil

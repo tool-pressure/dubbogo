@@ -8,6 +8,8 @@ import (
 	"github.com/AlexStocks/dubbogo/registry"
 )
 
+type NewSelector func(...Option) Selector
+
 // Selector builds on the registry as a mechanism to pick nodes.
 // This allows host pools and other things to be built using
 // various algorithms.

@@ -151,8 +151,7 @@ func getArgsTypeList(args []interface{}) (string, error) {
 // create request buffer body
 func PackRequest(reqID int64, path, dubboInterface, version, method string, args []interface{}, timeout int) ([]byte, error) {
 	var sirializationID = byte(78) // java 中标识一个class的ID
-	var header = make([]byte, HEADER_LENGTH<<10)
-	header = header[:0]
+	var header = make([]byte, 0, HEADER_LENGTH<<2)
 
 	//////////////////////////////////////////
 	// header

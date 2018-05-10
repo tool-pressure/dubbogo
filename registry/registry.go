@@ -17,6 +17,8 @@ type Watcher interface {
 	Stop()
 }
 
+type NewRegistry func(...Option) Registry
+
 // The registry provides an interface for service discovery
 // and an abstraction over varying implementations
 // {etcd, zookeeper, ...}

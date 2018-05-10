@@ -124,7 +124,7 @@ func (h *httpTransportClient) Send(m *Message) error {
 		_, err = reqBuf.WriteTo(h.conn)
 	}
 
-	return err
+	return jerrors.Trace(err)
 }
 
 func (h *httpTransportClient) Recv(m *Message) error {
@@ -151,13 +151,13 @@ func (h *httpTransportClient) Recv(m *Message) error {
 
 	rsp, err := http.ReadResponse(h.buff, r)
 	if err != nil {
-		return err
+		return jerrors.Trace(err)
 	}
 	defer rsp.Body.Close() // 这句话如果不调用，连接在调用(httpTransportClient)Close之前就不释放
 
 	b, err := ioutil.ReadAll(rsp.Body)
 	if err != nil {
-		return err
+		return jerrors.Trace(err)
 	}
 
 	if rsp.StatusCode != 200 {
@@ -191,7 +191,7 @@ func (h *httpTransportClient) Close() error {
 		close(h.r)
 		err = h.conn.Close()
 	})
-	return err
+	return jerrors.Trace(err)
 }
 
 //////////////////////////////////////////////
@@ -246,12 +246,12 @@ func (h *httpTransportSocket) Recv(m *Message) error {
 
 	r, err := http.ReadRequest(h.bufReader)
 	if err != nil {
-		return err
+		return jerrors.Trace(err)
 	}
 
 	b, err := ioutil.ReadAll(r.Body)
 	if err != nil {
-		return err
+		return jerrors.Trace(err)
 	}
 	r.Body.Close()
 
@@ -315,7 +315,7 @@ func (h *httpTransportSocket) Send(m *Message) error {
 	h.rspBuf.Reset()
 	err := rsp.Write(h.rspBuf)
 	if err != nil {
-		return err
+		return jerrors.Trace(err)
 	}
 
 	// set timeout if its greater than 0
@@ -326,7 +326,7 @@ func (h *httpTransportSocket) Send(m *Message) error {
 
 	_, err = h.rspBuf.WriteTo(h.conn)
 
-	return err
+	return jerrors.Trace(err)
 }
 
 func (h *httpTransportSocket) error(m *Message) error {
@@ -351,11 +351,11 @@ func (h *httpTransportSocket) error(m *Message) error {
 	h.rspBuf.Reset()
 	err := rsp.Write(h.rspBuf)
 	if err != nil {
-		return err
+		return jerrors.Trace(err)
 	}
 
 	_, err = h.rspBuf.WriteTo(h.conn)
-	return err
+	return jerrors.Trace(err)
 }
 
 func (h *httpTransportSocket) Close() error {
@@ -408,7 +408,7 @@ func (h *httpTransportListener) Addr() string {
 }
 
 func (h *httpTransportListener) Close() error {
-	return h.listener.Close()
+	return jerrors.Trace(h.listener.Close())
 }
 
 func (h *httpTransportListener) Accept(fn func(Socket)) error {
@@ -438,13 +438,13 @@ func (h *httpTransportListener) Accept(fn func(Socket)) error {
 				time.Sleep(tmpDelay)
 				continue
 			}
-			return err
+			return jerrors.Trace(err)
 		}
 
 		sock := initHttpTransportSocket(h.ht, c, h.release)
 
 		// 逻辑执行再单独启动一个goroutine
-		common.GoroutinePool.Go(func() {
+		go func() {
 			defer func() {
 				if r := recover(); r != nil {
 					const size = 64 << 10
@@ -456,7 +456,7 @@ func (h *httpTransportListener) Accept(fn func(Socket)) error {
 			}()
 
 			fn(sock) // rpcServer:handlePkg 函数里面有一个defer语句段，保证了正常退出的情况下sock.Close()
-		})
+		}()
 	}
 }
 
@@ -479,7 +479,7 @@ func (h *httpTransport) Dial(addr string, opts ...DialOption) (Client, error) {
 
 	conn, err := net.DialTimeout("tcp", addr, dopts.Timeout)
 	if err != nil {
-		return nil, err
+		return nil, jerrors.Trace(err)
 	}
 
 	return initHttpTransportClient(h, addr, conn, dopts), nil
@@ -535,7 +535,7 @@ func listen(addr string, fn func(string) (net.Listener, error)) (net.Listener, e
 
 		// hit max port
 		if port == max {
-			return nil, err
+			return nil, jerrors.Trace(err)
 		}
 	}
 

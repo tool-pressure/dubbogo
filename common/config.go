@@ -27,7 +27,7 @@ type ApplicationConfig struct {
 	Owner string
 }
 
-func (this *ApplicationConfig) ToString() string {
+func (c *ApplicationConfig) ToString() string {
 	return fmt.Sprintf("ApplicationConfig is {name:%s, version:%s, owner:%s, module:%s, organization:%s}",
-		this.Name, this.Version, this.Owner, this.Module, this.Organization)
+		c.Name, c.Version, c.Owner, c.Module, c.Organization)
 }

@@ -12,14 +12,17 @@ package client
 
 import (
 	"context"
-	"errors"
 	"io"
 	"sync"
 )
 
 import (
-	"github.com/AlexStocks/dubbogo/registry"
 	log "github.com/AlexStocks/log4go"
+	jerrors "github.com/juju/errors"
+)
+
+import (
+	"github.com/AlexStocks/dubbogo/registry"
 )
 
 // Implements the streamer interface
@@ -71,7 +74,7 @@ func (r *rpcStream) Send(msg interface{}) error {
 
 	if err := r.codec.WriteRequest(&req, msg); err != nil {
 		r.err = err
-		return err
+		return jerrors.Trace(err)
 	}
 	return nil
 }
@@ -93,7 +96,7 @@ func (r *rpcStream) Recv(msg interface{}) error {
 		}
 		log.Warn("msg{%v}, err{%#v}", msg, err)
 		r.err = err
-		return err
+		return jerrors.Trace(err)
 	}
 
 	switch {
@@ -107,15 +110,14 @@ func (r *rpcStream) Recv(msg interface{}) error {
 			r.err = io.EOF
 		}
 		if err := r.codec.ReadResponseBody(nil); err != nil {
-			r.err = errors.New("reading error payload: " + err.Error())
+			r.err = jerrors.Annotate(err, "reading error payload")
 		}
 	default:
 		if err := r.codec.ReadResponseBody(msg); err != nil {
-			r.err = errors.New("reading body " + err.Error())
+			r.err = jerrors.Annotate(err, "reading body")
 		}
 	}
 
-	log.Debug("rpcStream.Recv(msg{%v}) = r.err{%T %v}", msg, r.err, r.err)
 	return r.err
 }
 
@@ -126,12 +128,10 @@ func (r *rpcStream) Error() error {
 }
 
 func (r *rpcStream) Close() error {
-	// log.Debug("close rpcStream{%#v}", r)
 	select {
 	case <-r.closed:
 		return nil
 	default:
-		// log.Debug("close rpcStream.codec")
 		close(r.closed)
 		return r.codec.Close()
 	}

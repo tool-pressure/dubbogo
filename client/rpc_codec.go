@@ -14,12 +14,14 @@ package client
 
 import (
 	"bytes"
-	"errors"
+)
+
+import (
+	jerrors "github.com/juju/errors"
 )
 
 import (
 	"github.com/AlexStocks/dubbogo/codec"
-	"github.com/AlexStocks/dubbogo/codec/jsonrpc"
 	"github.com/AlexStocks/dubbogo/transport"
 )
 
@@ -37,10 +39,10 @@ func (e serverError) Error() string {
 
 // errShutdown holds the specific error for closing/closed connections
 var (
-	errShutdown = errors.New("connection is shut down")
+	errShutdown = jerrors.New("connection is shut down")
 )
 
-type rpcPlusCodec struct {
+type rpcCodec struct {
 	client transport.Client
 	codec  codec.Codec
 
@@ -65,24 +67,13 @@ type request struct {
 	Service       string
 	ServiceMethod string // format: "Service.Method"
 	Seq           int64  // sequence number chosen by client
-	// next          *request // for free list in Server
 }
 
 type response struct {
 	ServiceMethod string // echoes that of the Request
 	Seq           int64  // echoes that of the request
 	Error         string // error, if any.
-	// next          *response // for free list in Server
 }
-
-var (
-	defaultContentType = "application/octet-stream"
-
-	defaultCodecs = map[string]codec.NewCodec{
-		"application/json":    jsonrpc.NewCodec,
-		"application/jsonrpc": jsonrpc.NewCodec,
-	}
-)
 
 func (rwc *readWriteCloser) Read(p []byte) (n int, err error) {
 	return rwc.rbuf.Read(p)
@@ -98,12 +89,12 @@ func (rwc *readWriteCloser) Close() error {
 	return nil
 }
 
-func newRpcPlusCodec(req *transport.Message, client transport.Client, c codec.NewCodec) *rpcPlusCodec {
+func newRpcCodec(req *transport.Message, client transport.Client, c codec.NewCodec) *rpcCodec {
 	rwc := &readWriteCloser{
 		wbuf: bytes.NewBuffer(nil),
 		rbuf: bytes.NewBuffer(nil),
 	}
-	r := &rpcPlusCodec{
+	r := &rpcCodec{
 		buf:    rwc,
 		client: client,
 		codec:  c(rwc),
@@ -112,7 +103,7 @@ func newRpcPlusCodec(req *transport.Message, client transport.Client, c codec.Ne
 	return r
 }
 
-func (c *rpcPlusCodec) WriteRequest(req *request, body interface{}) error {
+func (c *rpcCodec) WriteRequest(req *request, body interface{}) error {
 	c.buf.wbuf.Reset()
 	m := &codec.Message{
 		Id:     req.Seq,
@@ -121,20 +112,22 @@ func (c *rpcPlusCodec) WriteRequest(req *request, body interface{}) error {
 		Type:   codec.Request,
 		Header: map[string]string{},
 	}
+	// Serialization
 	if err := c.codec.Write(m, body); err != nil {
-		return err
+		return jerrors.Trace(err)
 	}
+	// get binary stream
 	c.req.Body = c.buf.wbuf.Bytes()
 	for k, v := range m.Header {
 		c.req.Header[k] = v
 	}
-	return c.client.Send(c.req)
+	return jerrors.Trace(c.client.Send(c.req))
 }
 
-func (c *rpcPlusCodec) ReadResponseHeader(r *response) error {
+func (c *rpcCodec) ReadResponseHeader(r *response) error {
 	var m transport.Message
 	if err := c.client.Recv(&m); err != nil {
-		return err
+		return jerrors.Trace(err)
 	}
 	c.buf.rbuf.Reset()
 	c.buf.rbuf.Write(m.Body)
@@ -143,15 +136,14 @@ func (c *rpcPlusCodec) ReadResponseHeader(r *response) error {
 	r.ServiceMethod = cm.Method
 	r.Seq = cm.Id
 	r.Error = cm.Error
-	return err
+	return jerrors.Trace(err)
 }
 
-func (c *rpcPlusCodec) ReadResponseBody(b interface{}) error {
+func (c *rpcCodec) ReadResponseBody(b interface{}) error {
 	return c.codec.ReadBody(b)
 }
 
-func (c *rpcPlusCodec) Close() error {
-	// log.Debug("close rpcPlusCodec{%#v}", c)
+func (c *rpcCodec) Close() error {
 	c.buf.Close()
 	c.codec.Close()
 	return c.client.Close()
