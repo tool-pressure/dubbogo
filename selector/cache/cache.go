@@ -148,7 +148,7 @@ func (c *cacheSelector) update(res *registry.Result) {
 	log.Debug("service name:%s, its current member lists:%+v", sname, services)
 	if ok { // existing service found
 		for i, s := range services {
-			log.Debug("cache.services[%s][%d] = service{%#v}", sname, i, s)
+			log.Debug("cache.services[%s][%d] = service{%s}", sname, i, s)
 			if s.PrimitiveURL == res.Service.PrimitiveURL {
 				filterServices(&(services), i)
 			}
@@ -158,9 +158,9 @@ func (c *cacheSelector) update(res *registry.Result) {
 	switch res.Action {
 	case registry.ServiceURLAdd, registry.ServiceURLUpdate:
 		services = append(services, res.Service)
-		log.Info("selector add serviceURL{%#v}", *res.Service)
+		log.Info("selector add serviceURL{%s}", *res.Service)
 	case registry.ServiceURLDel:
-		log.Error("selector delete serviceURL{%#v}", *res.Service)
+		log.Error("selector delete serviceURL{%s}", *res.Service)
 	}
 	c.set(sname, services)
 	//services, ok = c.cache[sname]
@@ -272,7 +272,7 @@ func (c *cacheSelector) Select(service registry.ServiceConfigIf) (selector.Next,
 	// try the cache first
 	// if that fails go directly to the registry
 	services, err = c.get(service)
-	log.Debug("get(service{%+v} = serviceURL array{%#v})", service, services)
+	//log.Debug("get(service{%+v} = serviceURL array{%#v})", service, services)
 	if err != nil {
 		log.Error("cache.get(service{%+v}) = error{%+v}", service, jerrors.ErrorStack(err))
 		// return nil, err

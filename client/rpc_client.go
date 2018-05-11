@@ -25,6 +25,7 @@ import (
 )
 
 import (
+	"github.com/AlexStocks/dubbogo/codec"
 	"github.com/AlexStocks/dubbogo/common"
 	"github.com/AlexStocks/dubbogo/selector"
 	"github.com/AlexStocks/dubbogo/transport"
@@ -166,11 +167,7 @@ func (c *rpcClient) call(ctx context.Context, reqID int64, address, path string,
 			// 只缓存长连接
 			c.pool.release(req.Protocol(), address, conn, gerr)
 		}
-		// 下面这个分支与(rpcStream)Close, 2016/08/07
-		// else {
-		// 	log.Debug("close pool connection{%#v}", c)
-		// 	c.Close() // poolConn.Close->httpTransportClient.Close
-		// }
+
 		c.gcCh <- stream
 	}()
 
@@ -304,11 +301,11 @@ func (c *rpcClient) Call(ctx context.Context, request Request, response interfac
 			log.Error("reqID{%d}, @i{%d}, ctx.Done()", reqID, i)
 			return common.NewError("dubbogo.client", fmt.Sprintf("%v", ctx.Err()), 408)
 		case err := <-ch:
-			// if the call succeeded lets bail early
+			log.Debug("reqID{%d}, err:%+v", reqID, err)
 			if err == nil || len(err.Error()) == 0 {
 				return nil
 			}
-			log.Error("reqID{%d}, @i{%d}, err{%T-%v}", reqID, i, err, err)
+			log.Error("reqID{%d}, @i{%d}, err{%+v}", reqID, i, jerrors.ErrorStack(err))
 			gerr = jerrors.Trace(err)
 		}
 	}
@@ -490,6 +487,9 @@ func (c *rpcClient) Options() Options {
 
 func (c *rpcClient) NewRequest(service string, method string, request interface{}, reqOpts ...RequestOption) Request {
 	codecType := c.opts.CodecType.String()
+	if dubbogoClientConfigMap[c.opts.CodecType].transportType == codec.TRANSPORT_TCP {
+		reqOpts = append(reqOpts, StreamingRequest())
+	}
 	return newRpcRequest(codecType, service, method, request, codec2ContentType[codecType], reqOpts...)
 }
 

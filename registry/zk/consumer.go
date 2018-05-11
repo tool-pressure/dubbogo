@@ -319,7 +319,7 @@ func (c *consumerZookeeperRegistry) GetServices(i registry.ServiceConfigIf) ([]*
 
 	c.Lock()
 	for k, v := range c.services {
-		log.Debug("(consumerZookeeperRegistry)GetServices, service{%q}, serviceURL{%#v}", k, v)
+		log.Debug("(consumerZookeeperRegistry)GetServices, service{%q}, serviceURL{%s}", k, v)
 	}
 	serviceConfIf, ok = c.services[sc.Key()]
 	c.Unlock()
@@ -352,7 +352,7 @@ func (c *consumerZookeeperRegistry) GetServices(i registry.ServiceConfigIf) ([]*
 			continue
 		}
 		if !serviceConf.ServiceEqual(serviceURL) {
-			log.Warn("serviceURL{%#v} is not compatible with ServiceConfig{%#v}", serviceURL, serviceConf)
+			log.Warn("serviceURL{%s} is not compatible with ServiceConfig{%#v}", serviceURL, serviceConf)
 			continue
 		}
 

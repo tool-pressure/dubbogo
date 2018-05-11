@@ -53,7 +53,7 @@ type ServiceURLEvent struct {
 }
 
 func (e ServiceURLEvent) String() string {
-	return fmt.Sprintf("ServiceURLEvent{Action{%s}, Service{%#v}}", e.Action.String(), e.Service)
+	return fmt.Sprintf("ServiceURLEvent{Action{%s}, Service{%s}}", e.Action.String(), e.Service)
 }
 
 //////////////////////////////////////////
@@ -71,6 +71,14 @@ type ServiceURL struct {
 	Query        url.Values
 	Weight       int32
 	PrimitiveURL string
+}
+
+func (s ServiceURL) String() string {
+	return fmt.Sprintf(
+		"ServiceURL{Protocol:%s, Location:%s, Path:%s, Ip:%s, Port:%s, "+
+			"Version:%s, Group:%s, Weight:%d, Query:%+v}",
+		s.Protocol, s.Location, s.Path, s.Ip, s.Port,
+		s.Version, s.Group, s.Weight, s.Query)
 }
 
 func NewServiceURL(urlString string) (*ServiceURL, error) {

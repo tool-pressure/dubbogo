@@ -125,10 +125,10 @@ func (w *zookeeperWatcher) handleZkNodeEvent(zkPath string, children []string, c
 			continue
 		}
 		if !conf.ServiceEqual(serviceURL) {
-			log.Warn("serviceURL{%#v} is not compatible with ServiceConfig{%#v}", serviceURL, conf)
+			log.Warn("serviceURL{%s} is not compatible with ServiceConfig{%#v}", serviceURL, conf)
 			continue
 		}
-		log.Info("add serviceURL{%#v}", serviceURL)
+		log.Info("add serviceURL{%s}", serviceURL)
 		w.events <- event{&registry.Result{registry.ServiceURLAdd, serviceURL}, nil}
 		// watch w service node
 		go func(node string, serviceURL *registry.ServiceURL) {
@@ -136,7 +136,7 @@ func (w *zookeeperWatcher) handleZkNodeEvent(zkPath string, children []string, c
 			// watch goroutine退出，原因可能是service node不存在或者是与registry连接断开了
 			// 为了selector服务的稳定，仅在收到delete event的情况下向selector发送delete service event
 			if w.watchServiceNode(node) {
-				log.Info("delete serviceURL{%#v}", serviceURL)
+				log.Info("delete serviceURL{%s}", serviceURL)
 				w.events <- event{&registry.Result{registry.ServiceURLDel, serviceURL}, nil}
 			}
 			log.Warn("watchSelf(zk path{%s}) goroutine exit now", zkPath)
@@ -156,10 +156,10 @@ func (w *zookeeperWatcher) handleZkNodeEvent(zkPath string, children []string, c
 		log.Warn("delete zkPath{%s}", oldNode)
 		serviceURL, err = registry.NewServiceURL(n)
 		if !conf.ServiceEqual(serviceURL) {
-			log.Warn("serviceURL{%#v} has been deleted is not compatible with ServiceConfig{%#v}", serviceURL, conf)
+			log.Warn("serviceURL{%s} has been deleted is not compatible with ServiceConfig{%#v}", serviceURL, conf)
 			continue
 		}
-		log.Warn("delete serviceURL{%#v}", serviceURL)
+		log.Warn("delete serviceURL{%s}", serviceURL)
 		if err != nil {
 			log.Error("NewServiceURL(i{%s}) = error{%v}", n, jerrors.ErrorStack(err))
 			continue
@@ -266,10 +266,10 @@ func (w *zookeeperWatcher) watchService(zkPath string, conf registry.ServiceConf
 		// 因为service.ServiceConfig.service指代的是"/dubbo/com.xxx.xxx"中的"com.xxx.xxx"
 		// if serviceURL.Protocol != conf.Protocol || serviceURL.Group != conf.Group || serviceURL.Version != conf.Version {
 		if !conf.ServiceEqual(serviceURL) {
-			log.Warn("serviceURL{%#v} is not compatible with ServiceConfig{%#v}", serviceURL, conf)
+			log.Warn("serviceURL{%s} is not compatible with ServiceConfig{%#v}", serviceURL, conf)
 			continue
 		}
-		log.Debug("add serviceUrl{%#v}", serviceURL)
+		log.Debug("add serviceUrl{%s}", serviceURL)
 		w.events <- event{&registry.Result{registry.ServiceURLAdd, serviceURL}, nil}
 
 		// watch w service node
@@ -277,7 +277,7 @@ func (w *zookeeperWatcher) watchService(zkPath string, conf registry.ServiceConf
 		log.Info("watch dubbo service key{%s}", dubboPath)
 		go func(zkPath string, serviceURL *registry.ServiceURL) {
 			if w.watchServiceNode(dubboPath) {
-				log.Debug("delete serviceUrl{%#v}", serviceURL)
+				log.Debug("delete serviceUrl{%s}", serviceURL)
 				w.events <- event{&registry.Result{registry.ServiceURLDel, serviceURL}, nil}
 			}
 			log.Warn("watchSelf(zk path{%s}) goroutine exit now", zkPath)
