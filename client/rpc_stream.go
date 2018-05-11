@@ -13,7 +13,9 @@ package client
 import (
 	"context"
 	"io"
+	"strings"
 	"sync"
+	"time"
 )
 
 import (
@@ -28,12 +30,13 @@ import (
 // Implements the streamer interface
 type rpcStream struct {
 	sync.RWMutex
-	seq     int64
-	closed  chan struct{}
-	err     error
-	request Request
-	codec   clientCodec
-	context context.Context
+	seq        int64
+	closed     chan struct{}
+	err        error
+	serviceURL registry.ServiceURL
+	request    Request
+	codec      clientCodec
+	context    context.Context
 }
 
 func (r *rpcStream) isClosed() bool {
@@ -54,28 +57,33 @@ func (r *rpcStream) Request() Request {
 }
 
 // 调用rpcStream.clientCodec.WriteRequest函数
-func (r *rpcStream) Send(msg interface{}) error {
+func (r *rpcStream) Send(args interface{}, timeout time.Duration) error {
 	r.Lock()
-	defer r.Unlock()
 
 	if r.isClosed() {
 		r.err = errShutdown
+		r.Unlock()
 		return errShutdown
 	}
 
 	seq := r.seq
 	r.seq++
+	r.Unlock()
 
 	req := request{
+		Version:       r.request.Version(),
+		ServicePath:   strings.TrimPrefix(r.serviceURL.Path, "/"),
 		Service:       r.request.ServiceConfig().(*registry.ServiceConfig).Service,
 		Seq:           seq,
 		ServiceMethod: r.request.Method(),
+		Timeout:       timeout,
 	}
 
-	if err := r.codec.WriteRequest(&req, msg); err != nil {
+	if err := r.codec.WriteRequest(&req, args); err != nil {
 		r.err = err
 		return jerrors.Trace(err)
 	}
+
 	return nil
 }
 

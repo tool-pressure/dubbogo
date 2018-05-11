@@ -66,6 +66,7 @@ func (c *cacheSelector) copy(current []*registry.ServiceURL) []*registry.Service
 func (c *cacheSelector) get(s registry.ServiceConfigIf) ([]*registry.ServiceURL, error) {
 	c.Lock()
 	defer c.Unlock()
+	log.Debug("c.get(@s:%#v)", s)
 
 	// check the cache first
 	serviceConf, _ := s.(registry.ServiceConfig)
@@ -307,7 +308,7 @@ func (c *cacheSelector) Close() error {
 }
 
 func (c *cacheSelector) String() string {
-	return "cache selector"
+	return "cache-selector"
 }
 
 // selector主要有两个接口，对外接口Select用于获取地址，select调用get，get调用cp;

@@ -63,7 +63,7 @@ func (e ServiceURLEvent) String() string {
 type ServiceURL struct {
 	Protocol     string
 	Location     string // ip+port
-	Path         string // like  /com.qianmi.dubbo.UserProvider
+	Path         string // like  /com.ikurento.dubbo.UserProvider3
 	Ip           string
 	Port         string
 	Version      string

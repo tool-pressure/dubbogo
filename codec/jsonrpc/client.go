@@ -116,12 +116,6 @@ func (c *clientCodec) Write(m *codec.Message, param interface{}) error {
 	return c.enc.Encode(&c.req)
 }
 
-// func (r *clientResponse) reset() {
-// 	r.ID = 0
-// 	r.Result = nil
-// 	r.Error = nil
-// }
-
 func (c *clientCodec) ReadHeader(m *codec.Message) error {
 	c.resp.reset()
 	if err := c.dec.Decode(&c.resp); err != nil {

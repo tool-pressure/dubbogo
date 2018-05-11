@@ -372,7 +372,7 @@ func (c *consumerZookeeperRegistry) GetServices(i registry.ServiceConfigIf) ([]*
 }
 
 func (c *consumerZookeeperRegistry) String() string {
-	return "dubbogo rpc consumer zookeeper registry"
+	return "dubbogo-consumer-zookeeper-registry"
 }
 
 // 删除zk上注册的registers

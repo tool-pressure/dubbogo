@@ -266,7 +266,7 @@ LOOP:
 }
 
 func (s *providerZookeeperRegistry) String() string {
-	return "dubbogo rpc provider zookeeper registry"
+	return "dubbogo-provider-zookeeper-registry"
 }
 
 func (s *providerZookeeperRegistry) closeRegisters() {

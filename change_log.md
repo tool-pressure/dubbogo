@@ -17,6 +17,7 @@ dubbogo 目前版本(0.1.1)支持的codec 是jsonrpc 2.0，transport protocol是
 - 3 Registry.GetService -> Registry.GetServices
 - 4 use ServiceConfigIf in selector.Select()
 - 5 把dubbog-examples client下面一些默认配置放到client package 下面
+- 6 把hessian codec和rpc client对接起来
 
 ### 2016-10-26 ###
 ---

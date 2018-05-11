@@ -194,5 +194,5 @@ func (r *zookeeperRegistry) registerTempZookeeperNode(root string, node string) 
 }
 
 func (r *zookeeperRegistry) String() string {
-	return "zookeeper registry"
+	return "zookeeper-registry"
 }

@@ -11,9 +11,7 @@
 package transport
 
 import (
-	"bufio"
-	"encoding/gob"
-	"errors"
+	"io"
 	"net"
 	"runtime"
 	"time"
@@ -26,6 +24,7 @@ import (
 
 import (
 	"github.com/AlexStocks/dubbogo/common"
+	"github.com/AlexStocks/goext/log"
 )
 
 const (
@@ -34,77 +33,20 @@ const (
 )
 
 //////////////////////////////////////////////
-// tcp transport client
-//////////////////////////////////////////////
-
-type tcpTransportClient struct {
-	t        *tcpTransport
-	dialOpts DialOptions
-	conn     net.Conn
-	enc      *gob.Encoder
-	dec      *gob.Decoder
-	encBuf   *bufio.Writer
-}
-
-func initTcpTransportClient(t *tcpTransport, conn net.Conn, opts DialOptions) *tcpTransportClient {
-	encBuf := bufio.NewWriter(conn)
-	return &tcpTransportClient{
-		t:        t,
-		dialOpts: opts,
-		conn:     conn,
-		encBuf:   encBuf,
-		enc:      gob.NewEncoder(encBuf),
-		dec:      gob.NewDecoder(conn),
-	}
-}
-
-func (t *tcpTransportClient) Send(m *Message) error {
-	if t.t.opts.Timeout > time.Duration(0) {
-		common.SetNetConnTimeout(t.conn, t.t.opts.Timeout)
-		defer common.SetNetConnTimeout(t.conn, 0)
-	}
-	if err := t.enc.Encode(m); err != nil {
-		return jerrors.Trace(err)
-	}
-
-	return jerrors.Trace(t.encBuf.Flush())
-}
-
-func (t *tcpTransportClient) Recv(m *Message) error {
-	if t.t.opts.Timeout > time.Duration(0) {
-		common.SetNetConnTimeout(t.conn, t.t.opts.Timeout)
-		defer common.SetNetConnTimeout(t.conn, 0)
-	}
-
-	return jerrors.Trace(t.dec.Decode(&m))
-}
-
-func (t *tcpTransportClient) Close() error {
-	return jerrors.Trace(t.conn.Close())
-}
-
-//////////////////////////////////////////////
 // tcp transport socket
 //////////////////////////////////////////////
 
 type tcpTransportSocket struct {
 	t       *tcpTransport
 	conn    net.Conn
-	enc     *gob.Encoder
-	dec     *gob.Decoder
-	encBuf  *bufio.Writer
 	timeout time.Duration
 	release func()
 }
 
 func initTcpTransportSocket(t *tcpTransport, c net.Conn, release func()) *tcpTransportSocket {
-	encBuf := bufio.NewWriter(c)
 	return &tcpTransportSocket{
 		t:       t,
 		conn:    c,
-		encBuf:  encBuf,
-		enc:     gob.NewEncoder(encBuf),
-		dec:     gob.NewDecoder(c),
 		release: release,
 	}
 }
@@ -115,9 +57,9 @@ func (t *tcpTransportSocket) Reset(c net.Conn, release func()) {
 	t.release = release
 }
 
-func (t *tcpTransportSocket) Recv(m *Message) error {
-	if m == nil {
-		return errors.New("message passed in is nil")
+func (t *tcpTransportSocket) Recv(p *Package) error {
+	if p == nil {
+		return jerrors.Errorf("message passed in is nil")
 	}
 
 	// set timeout if its greater than 0
@@ -126,19 +68,27 @@ func (t *tcpTransportSocket) Recv(m *Message) error {
 		defer common.SetNetConnTimeout(t.conn, 0)
 	}
 
-	return jerrors.Trace(t.dec.Decode(&m))
+	t.conn.Read(p.Body)
+
+	return nil
 }
 
-func (t *tcpTransportSocket) Send(m *Message) error {
+func (t *tcpTransportSocket) Send(p *Package) error {
 	// set timeout if its greater than 0
 	if t.timeout > time.Duration(0) {
 		common.SetNetConnTimeout(t.conn, t.timeout)
 		defer common.SetNetConnTimeout(t.conn, 0)
 	}
-	if err := t.enc.Encode(m); err != nil {
+
+	n, err := t.conn.Write(p.Body)
+	if err != nil {
 		return jerrors.Trace(err)
 	}
-	return jerrors.Trace(t.encBuf.Flush())
+	if n < len(p.Body) {
+		return jerrors.Annotatef(io.ErrShortWrite, "t.conn.Write(buf len:%d) = len:%d", len(p.Body), n)
+	}
+
+	return nil
 }
 
 func (t *tcpTransportSocket) Close() error {
@@ -151,6 +101,60 @@ func (t *tcpTransportSocket) LocalAddr() net.Addr {
 
 func (t *tcpTransportSocket) RemoteAddr() net.Addr {
 	return t.conn.RemoteAddr()
+}
+
+//////////////////////////////////////////////
+// tcp transport client
+//////////////////////////////////////////////
+
+type tcpTransportClient struct {
+	t    *tcpTransport
+	conn net.Conn
+}
+
+func initTcpTransportClient(t *tcpTransport, conn net.Conn) *tcpTransportClient {
+	return &tcpTransportClient{
+		t:    t,
+		conn: conn,
+	}
+}
+
+func (t *tcpTransportClient) Send(p *Package) error {
+	if t.t.opts.Timeout > time.Duration(0) {
+		common.SetNetConnTimeout(t.conn, t.t.opts.Timeout)
+		defer common.SetNetConnTimeout(t.conn, 0)
+	}
+
+	n, err := t.conn.Write(p.Body)
+	if err != nil {
+		return jerrors.Trace(err)
+	}
+	if n < len(p.Body) {
+		return jerrors.Annotatef(io.ErrShortWrite, "t.conn.Write(buf len:%d) = len:%d", len(p.Body), n)
+	}
+
+	return nil
+}
+
+func (t *tcpTransportClient) Recv(p *Package) error {
+	if t.t.opts.Timeout > time.Duration(0) {
+		common.SetNetConnTimeout(t.conn, t.t.opts.Timeout)
+		defer common.SetNetConnTimeout(t.conn, 0)
+	}
+
+	if p.Body == nil {
+		p.Body = make([]byte, 0, 128)
+	}
+	buf := make([]byte, 0, 1024)
+	// l, err := t.conn.Read(p.Body)
+	l, err := t.conn.Read(buf)
+	gxlog.CWarn("rsp return len %d, err:%v", l, err)
+
+	return jerrors.Trace(err)
+}
+
+func (t *tcpTransportClient) Close() error {
+	return jerrors.Trace(t.conn.Close())
 }
 
 //////////////////////////////////////////////
@@ -247,17 +251,18 @@ func (t *tcpTransport) Dial(addr string, opts ...DialOption) (Client, error) {
 	dopts := DialOptions{
 		Timeout: DefaultDialTimeout,
 	}
-
 	for _, opt := range opts {
 		opt(&dopts)
 	}
+
+	gxlog.CError("connect address:%s", addr)
 
 	conn, err := net.DialTimeout("tcp", addr, dopts.Timeout)
 	if err != nil {
 		return nil, jerrors.Trace(err)
 	}
 
-	return initTcpTransportClient(t, conn, dopts), nil
+	return initTcpTransportClient(t, conn), nil
 }
 
 func (t *tcpTransport) Listen(addr string, opts ...ListenOption) (Listener, error) {
@@ -278,7 +283,7 @@ func (t *tcpTransport) Listen(addr string, opts ...ListenOption) (Listener, erro
 }
 
 func (t *tcpTransport) String() string {
-	return "tcp"
+	return "tcp-transport"
 }
 
 func newTcpTransport(opts ...Option) Transport {

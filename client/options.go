@@ -33,10 +33,7 @@ func StreamingRequest() RequestOption {
 }
 
 type RequestOptions struct {
-	Stream bool
-
-	// Other options for implementations of the interface
-	// can be stored in a context
+	Stream  bool
 	Context context.Context
 }
 

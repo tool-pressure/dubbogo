@@ -31,7 +31,7 @@ import (
 // It also supports bidirectional streaming of requests.
 type Client interface {
 	Options() Options
-	NewRequest(service, method string, req interface{}, reqOpts ...RequestOption) Request
+	NewRequest(version, service, method string, args interface{}, reqOpts ...RequestOption) Request
 	Call(ctx context.Context, req Request, rsp interface{}, opts ...CallOption) error
 	String() string
 	Close()
@@ -39,23 +39,15 @@ type Client interface {
 
 // Request is the interface for a synchronous request used by Call or Stream
 type Request interface {
+	Options() RequestOptions
 	Protocol() string
-	ServiceConfig() registry.ServiceConfigIf
+	Version() string
 	Method() string
+	Args() interface{}
 	ContentType() string
-	Request() interface{}
+	ServiceConfig() registry.ServiceConfigIf
 	// indicates whether the request will be a streaming one rather than unary
 	Stream() bool
-}
-
-// Streamer is the interface for a bidirectional synchronous stream
-type Streamer interface {
-	Context() context.Context
-	Request() Request
-	Send(interface{}) error
-	Recv(interface{}) error
-	Error() error
-	Close() error
 }
 
 type (

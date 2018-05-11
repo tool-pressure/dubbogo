@@ -14,9 +14,11 @@ package client
 
 import (
 	"bytes"
+	"time"
 )
 
 import (
+	log "github.com/AlexStocks/log4go"
 	jerrors "github.com/juju/errors"
 )
 
@@ -46,7 +48,7 @@ type rpcCodec struct {
 	client transport.Client
 	codec  codec.Codec
 
-	req *transport.Message
+	pkg *transport.Package
 	buf *readWriteCloser
 }
 
@@ -56,7 +58,7 @@ type readWriteCloser struct {
 }
 
 type clientCodec interface {
-	WriteRequest(*request, interface{}) error
+	WriteRequest(req *request, args interface{}) error
 	ReadResponseHeader(*response) error
 	ReadResponseBody(interface{}) error
 
@@ -64,9 +66,12 @@ type clientCodec interface {
 }
 
 type request struct {
+	Version       string
+	ServicePath   string
 	Service       string
 	ServiceMethod string // format: "Service.Method"
 	Seq           int64  // sequence number chosen by client
+	Timeout       time.Duration
 }
 
 type response struct {
@@ -89,48 +94,55 @@ func (rwc *readWriteCloser) Close() error {
 	return nil
 }
 
-func newRpcCodec(req *transport.Message, client transport.Client, c codec.NewCodec) *rpcCodec {
+func newRpcCodec(req *transport.Package, client transport.Client, c codec.NewCodec) *rpcCodec {
 	rwc := &readWriteCloser{
 		wbuf: bytes.NewBuffer(nil),
 		rbuf: bytes.NewBuffer(nil),
 	}
-	r := &rpcCodec{
+
+	return &rpcCodec{
 		buf:    rwc,
 		client: client,
 		codec:  c(rwc),
-		req:    req,
+		pkg:    req,
 	}
-	return r
 }
 
-func (c *rpcCodec) WriteRequest(req *request, body interface{}) error {
+func (c *rpcCodec) WriteRequest(req *request, args interface{}) error {
 	c.buf.wbuf.Reset()
 	m := &codec.Message{
-		Id:     req.Seq,
-		Target: req.Service,
-		Method: req.ServiceMethod,
-		Type:   codec.Request,
-		Header: map[string]string{},
+		Id:          req.Seq,
+		Version:     req.Version,
+		ServicePath: req.ServicePath,
+		Target:      req.Service,
+		Method:      req.ServiceMethod,
+		Timeout:     req.Timeout,
+		Type:        codec.Request,
+		Header:      map[string]string{},
 	}
 	// Serialization
-	if err := c.codec.Write(m, body); err != nil {
+	if err := c.codec.Write(m, args); err != nil {
 		return jerrors.Trace(err)
 	}
 	// get binary stream
-	c.req.Body = c.buf.wbuf.Bytes()
-	for k, v := range m.Header {
-		c.req.Header[k] = v
+	c.pkg.Body = c.buf.wbuf.Bytes()
+	log.Info("after codec.Write, codec message:%+v", m)
+	// tcp 层不使用 transport.Package.Header, codec.Write 调用之后其所有内容已经序列化进 transport.Package.Body
+	if c.pkg.Header != nil {
+		for k, v := range m.Header {
+			c.pkg.Header[k] = v
+		}
 	}
-	return jerrors.Trace(c.client.Send(c.req))
+	return jerrors.Trace(c.client.Send(c.pkg))
 }
 
 func (c *rpcCodec) ReadResponseHeader(r *response) error {
-	var m transport.Message
-	if err := c.client.Recv(&m); err != nil {
+	var p transport.Package
+	if err := c.client.Recv(&p); err != nil {
 		return jerrors.Trace(err)
 	}
 	c.buf.rbuf.Reset()
-	c.buf.rbuf.Write(m.Body)
+	c.buf.rbuf.Write(p.Body)
 	var cm codec.Message
 	err := c.codec.ReadHeader(&cm, codec.Response)
 	r.ServiceMethod = cm.Method

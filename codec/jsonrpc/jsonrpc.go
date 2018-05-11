@@ -27,7 +27,7 @@ func (j *jsonCodec) Close() error {
 }
 
 func (j *jsonCodec) String() string {
-	return "json-rpc2"
+	return "jsonrpc2 codec"
 }
 
 func (j *jsonCodec) Write(m *codec.Message, b interface{}) error {

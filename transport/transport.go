@@ -5,12 +5,12 @@ import (
 	"time"
 )
 
-type Message struct {
+type Package struct {
 	Header map[string]string
 	Body   []byte
 }
 
-func (m *Message) Reset() {
+func (m *Package) Reset() {
 	m.Body = m.Body[:0]
 	for key := range m.Header {
 		delete(m.Header, key)
@@ -18,8 +18,8 @@ func (m *Message) Reset() {
 }
 
 type Socket interface {
-	Recv(*Message) error
-	Send(*Message) error
+	Recv(*Package) error
+	Send(*Package) error
 	Reset(c net.Conn, release func())
 	Close() error
 	LocalAddr() net.Addr
@@ -27,8 +27,8 @@ type Socket interface {
 }
 
 type Client interface {
-	Recv(*Message) error
-	Send(*Message) error
+	Recv(*Package) error
+	Send(*Package) error
 	Close() error
 }
 

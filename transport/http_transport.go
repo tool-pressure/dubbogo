@@ -75,16 +75,16 @@ func initHttpTransportClient(
 	}
 }
 
-func (h *httpTransportClient) Send(m *Message) error {
+func (h *httpTransportClient) Send(p *Package) error {
 	header := make(http.Header)
 
-	// http.header = m.header
-	for k, v := range m.Header {
+	// http.header = p.header
+	for k, v := range p.Header {
 		header.Set(k, v)
 	}
 
-	// http.body = m.body
-	reqB := bytes.NewBuffer(m.Body)
+	// http.body = p.body
+	reqB := bytes.NewBuffer(p.Body)
 	defer reqB.Reset()
 	buf := &buffer{
 		reqB,
@@ -97,8 +97,8 @@ func (h *httpTransportClient) Send(m *Message) error {
 			Host:   h.addr,
 			Path:   h.dialOpts.Path,
 		},
-		Header:        header, // m.header
-		Body:          buf,    // m.body
+		Header:        header, // p.header
+		Body:          buf,    // p.body
 		ContentLength: int64(reqB.Len()),
 		Host:          h.addr,
 	}
@@ -127,7 +127,7 @@ func (h *httpTransportClient) Send(m *Message) error {
 	return jerrors.Trace(err)
 }
 
-func (h *httpTransportClient) Recv(m *Message) error {
+func (h *httpTransportClient) Recv(p *Package) error {
 	var r *http.Request
 	if !h.dialOpts.Stream {
 		rc, ok := <-h.r
@@ -164,7 +164,7 @@ func (h *httpTransportClient) Recv(m *Message) error {
 		return errors.New(rsp.Status + ": " + string(b))
 	}
 
-	mr := &Message{
+	mr := &Package{
 		Header: make(map[string]string),
 		Body:   b,
 	}
@@ -177,7 +177,7 @@ func (h *httpTransportClient) Recv(m *Message) error {
 		}
 	}
 
-	*m = *mr
+	*p = *mr
 	return nil
 }
 
@@ -233,8 +233,8 @@ func (h *httpTransportSocket) Reset(c net.Conn, release func()) {
 	h.release = release
 }
 
-func (h *httpTransportSocket) Recv(m *Message) error {
-	if m == nil {
+func (h *httpTransportSocket) Recv(p *Package) error {
+	if p == nil {
 		return errors.New("message passed in is nil")
 	}
 
@@ -256,12 +256,12 @@ func (h *httpTransportSocket) Recv(m *Message) error {
 	r.Body.Close()
 
 	// 初始化的时候创建了Header，并给Body赋值
-	mr := &Message{
+	mr := &Package{
 		Header: make(map[string]string),
 		Body:   b,
 	}
 
-	// 下面的代码块给Message{Header}进行赋值
+	// 下面的代码块给Package{Header}进行赋值
 	for k, v := range r.Header {
 		if len(v) > 0 {
 			mr.Header[k] = v[0]
@@ -280,12 +280,12 @@ func (h *httpTransportSocket) Recv(m *Message) error {
 	default:
 	}
 
-	*m = *mr
+	*p = *mr
 	return nil
 }
 
-func (h *httpTransportSocket) Send(m *Message) error {
-	b := bytes.NewBuffer(m.Body)
+func (h *httpTransportSocket) Send(p *Package) error {
+	b := bytes.NewBuffer(p.Body)
 	defer b.Reset()
 
 	r := <-h.reqQ
@@ -298,11 +298,11 @@ func (h *httpTransportSocket) Send(m *Message) error {
 		Proto:         "HTTP/1.1",
 		ProtoMajor:    1,
 		ProtoMinor:    1,
-		ContentLength: int64(len(m.Body)),
+		ContentLength: int64(len(p.Body)),
 	}
 
-	// 根据@m，修改Response{Header}
-	for k, v := range m.Header {
+	// 根据@p，修改Response{Header}
+	for k, v := range p.Header {
 		rsp.Header.Set(k, v)
 	}
 
@@ -329,8 +329,8 @@ func (h *httpTransportSocket) Send(m *Message) error {
 	return jerrors.Trace(err)
 }
 
-func (h *httpTransportSocket) error(m *Message) error {
-	b := bytes.NewBuffer(m.Body)
+func (h *httpTransportSocket) error(p *Package) error {
+	b := bytes.NewBuffer(p.Body)
 	defer b.Reset()
 	rsp := &http.Response{
 		Header:        make(http.Header),
@@ -340,10 +340,10 @@ func (h *httpTransportSocket) error(m *Message) error {
 		Proto:         "HTTP/1.1",
 		ProtoMajor:    1,
 		ProtoMinor:    1,
-		ContentLength: int64(len(m.Body)),
+		ContentLength: int64(len(p.Body)),
 	}
 
-	for k, v := range m.Header {
+	for k, v := range p.Header {
 		rsp.Header.Set(k, v)
 	}
 
@@ -561,7 +561,7 @@ func (h *httpTransport) Listen(addr string, opts ...ListenOption) (Listener, err
 }
 
 func (h *httpTransport) String() string {
-	return "http"
+	return "http-transport"
 }
 
 func newHTTPTransport(opts ...Option) *httpTransport {

@@ -16,6 +16,7 @@ import (
 )
 
 import (
+	"github.com/AlexStocks/goext/log"
 	jerrors "github.com/juju/errors"
 )
 
@@ -31,21 +32,23 @@ type hessianCodec struct {
 	// s   *serverCodec
 }
 
-func (j *hessianCodec) Close() error {
-	j.buf.Reset()
-	return j.rwc.Close()
+func (h *hessianCodec) Close() error {
+	h.buf.Reset()
+	return h.rwc.Close()
 }
 
-func (j *hessianCodec) String() string {
-	return "hessian"
+func (h *hessianCodec) String() string {
+	return "hessian codec"
 }
 
-func (j *hessianCodec) Write(m *codec.Message, b interface{}) error {
+func (h *hessianCodec) Write(m *codec.Message, b interface{}) error {
+	gxlog.CInfo("@m:%+v, b:%+v", m, b)
 	switch m.Type {
 	case codec.Request:
-		// return j.c.Write(m, b)
+		h.buf.Reset()
+		return jerrors.Trace(packRequest(m, b, h.rwc))
 	case codec.Response:
-		// return j.s.Write(m, b)
+		// return h.s.Write(m, b)
 	default:
 		return jerrors.Errorf("Unrecognised message type: %v", m.Type)
 	}
@@ -53,29 +56,31 @@ func (j *hessianCodec) Write(m *codec.Message, b interface{}) error {
 	return nil
 }
 
-func (j *hessianCodec) ReadHeader(m *codec.Message, mt codec.MessageType) error {
-	j.buf.Reset()
-	j.mt = mt
+func (h *hessianCodec) ReadHeader(m *codec.Message, mt codec.MessageType) error {
+	h.buf.Reset()
+	h.mt = mt
+
+	gxlog.CError("get response header")
 
 	switch mt {
 	case codec.Request:
-		// return j.s.ReadHeader(m)
+		// return h.s.ReadHeader(m)
 	case codec.Response:
-		// return j.c.ReadHeader(m)
+		// return h.c.ReadHeader(m)
 	default:
 		return jerrors.Errorf("Unrecognised message type: %v", mt)
 	}
 	return nil
 }
 
-func (j *hessianCodec) ReadBody(b interface{}) error {
-	switch j.mt {
+func (h *hessianCodec) ReadBody(b interface{}) error {
+	switch h.mt {
 	case codec.Request:
-		// return j.s.ReadBody(b)
+		// return h.s.ReadBody(b)
 	case codec.Response:
-		// return j.c.ReadBody(b)
+		// return h.c.ReadBody(b)
 	default:
-		return jerrors.Errorf("Unrecognised message type: %v", j.mt)
+		return jerrors.Errorf("Unrecognised message type: %v", h.mt)
 	}
 	return nil
 }

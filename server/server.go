@@ -64,7 +64,7 @@ func (s *server) handlePkg(servo interface{}, sock transport.Socket) {
 	var (
 		ok          bool
 		rpc         *rpcServer
-		msg         transport.Message
+		pkg         transport.Package
 		err         error
 		timeout     uint64
 		contentType string
@@ -91,20 +91,20 @@ func (s *server) handlePkg(servo interface{}, sock transport.Socket) {
 	}()
 
 	for {
-		msg.Reset()
+		pkg.Reset()
 		// 读取请求包
-		if err = sock.Recv(&msg); err != nil {
+		if err = sock.Recv(&pkg); err != nil {
 			return
 		}
 
 		// 下面的所有逻辑都是处理请求包，并回复response
 		// we use s Content-Type header to identify the codec needed
-		contentType = msg.Header["Content-Type"]
+		contentType = pkg.Header["Content-Type"]
 
 		// codec of jsonrpc & other type etc
 		codecFunc, err = s.newCodec(contentType)
 		if err != nil {
-			sock.Send(&transport.Message{
+			sock.Send(&transport.Package{
 				Header: map[string]string{
 					"Content-Type": "text/plain",
 				},
@@ -115,11 +115,11 @@ func (s *server) handlePkg(servo interface{}, sock transport.Socket) {
 
 		// !!!! 雷同于consumer/rpc_client中那个关键的一句，把github.com/AlexStocks/dubbogo/transport & github.com/AlexStocks/dubbogo/codec结合了起来
 		// newRpcCodec(*transport.Message, transport.Socket, codec.NewCodec)
-		codec = newRpcCodec(&msg, sock, codecFunc)
+		codec = newRpcCodec(&pkg, sock, codecFunc)
 
 		// strip our headers
 		header = make(map[string]string)
-		for key, value = range msg.Header {
+		for key, value = range pkg.Header {
 			header[key] = value
 		}
 		delete(header, "Content-Type")
@@ -128,8 +128,8 @@ func (s *server) handlePkg(servo interface{}, sock transport.Socket) {
 		// ctx = metadata.NewContext(context.Background(), header)
 		ctx = context.WithValue(context.Background(), common.DUBBOGO_CTX_KEY, header)
 		// we use s Timeout header to set a server deadline
-		if len(msg.Header["Timeout"]) > 0 {
-			if timeout, err = strconv.ParseUint(msg.Header["Timeout"], 10, 64); err == nil {
+		if len(pkg.Header["Timeout"]) > 0 {
+			if timeout, err = strconv.ParseUint(pkg.Header["Timeout"], 10, 64); err == nil {
 				ctx, _ = context.WithTimeout(ctx, time.Duration(timeout))
 			}
 		}
@@ -305,5 +305,5 @@ func (s *server) Stop() {
 }
 
 func (s *server) String() string {
-	return "dubbogo rpc server"
+	return "dubbogo-server"
 }

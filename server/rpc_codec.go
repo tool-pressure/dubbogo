@@ -26,7 +26,7 @@ type rpcCodec struct {
 	socket transport.Socket
 	codec  codec.Codec
 
-	req *transport.Message
+	pkg *transport.Package
 	buf *readWriteCloser
 }
 
@@ -56,7 +56,7 @@ func (rwc *readWriteCloser) Close() error {
 	return nil
 }
 
-func newRpcCodec(req *transport.Message, socket transport.Socket, c codec.NewCodec) serverCodec {
+func newRpcCodec(req *transport.Package, socket transport.Socket, c codec.NewCodec) serverCodec {
 	rwc := &readWriteCloser{
 		rbuf: bytes.NewBuffer(req.Body),
 		wbuf: bytes.NewBuffer(nil),
@@ -64,27 +64,27 @@ func newRpcCodec(req *transport.Message, socket transport.Socket, c codec.NewCod
 	r := &rpcCodec{
 		buf:    rwc,
 		codec:  c(rwc),
-		req:    req,
+		pkg:    req,
 		socket: socket,
 	}
 	return r
 }
 
 func (c *rpcCodec) ReadRequestHeader(r *request, first bool) error {
-	m := codec.Message{Header: c.req.Header}
+	m := codec.Message{Header: c.pkg.Header}
 
 	if !first {
-		var tm transport.Message
+		var tp transport.Package
 		// transport.Socket.Recv
-		if err := c.socket.Recv(&tm); err != nil {
+		if err := c.socket.Recv(&tp); err != nil {
 			return err
 		}
 		c.buf.rbuf.Reset()
-		if _, err := c.buf.rbuf.Write(tm.Body); err != nil {
+		if _, err := c.buf.rbuf.Write(tp.Body); err != nil {
 			return err
 		}
 
-		m.Header = tm.Header
+		m.Header = tp.Header
 	}
 
 	err := c.codec.ReadHeader(&m, codec.Request)
@@ -112,8 +112,8 @@ func (c *rpcCodec) WriteResponse(r *response, body interface{}, last bool) error
 		return err
 	}
 
-	m.Header["Content-Type"] = c.req.Header["Content-Type"]
-	return c.socket.Send(&transport.Message{
+	m.Header["Content-Type"] = c.pkg.Header["Content-Type"]
+	return c.socket.Send(&transport.Package{
 		Header: m.Header,
 		Body:   c.buf.wbuf.Bytes(),
 	})
