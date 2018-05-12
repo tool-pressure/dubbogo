@@ -15,6 +15,7 @@ import (
 )
 
 type rpcRequest struct {
+	group       string
 	protocol    string
 	version     string
 	service     string
@@ -24,7 +25,7 @@ type rpcRequest struct {
 	opts        RequestOptions
 }
 
-func newRpcRequest(protocol, version, service, method string, args interface{},
+func newRpcRequest(group, protocol, version, service, method string, args interface{},
 	contentType string, reqOpts ...RequestOption) Request {
 
 	var opts RequestOptions
@@ -33,6 +34,7 @@ func newRpcRequest(protocol, version, service, method string, args interface{},
 	}
 
 	return &rpcRequest{
+		group:       group,
 		protocol:    protocol,
 		version:     version,
 		service:     service,
@@ -58,8 +60,9 @@ func (r *rpcRequest) ContentType() string {
 func (r *rpcRequest) ServiceConfig() registry.ServiceConfigIf {
 	return &registry.ServiceConfig{
 		Protocol: r.protocol,
-		Version:  r.version,
 		Service:  r.service,
+		Group:    r.group,
+		Version:  r.version,
 	}
 }
 

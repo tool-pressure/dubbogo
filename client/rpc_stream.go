@@ -118,11 +118,11 @@ func (r *rpcStream) Recv(msg interface{}) error {
 			r.err = io.EOF
 		}
 		if err := r.codec.ReadResponseBody(nil); err != nil {
-			r.err = jerrors.Annotate(err, "reading error payload")
+			r.err = jerrors.Trace(err)
 		}
 	default:
 		if err := r.codec.ReadResponseBody(msg); err != nil {
-			r.err = jerrors.Annotate(err, "reading body")
+			r.err = jerrors.Trace(err)
 		}
 	}
 

@@ -468,6 +468,10 @@ type httpTransport struct {
 	opts Options
 }
 
+func (h *httpTransport) Options() *Options {
+	return &h.opts
+}
+
 func (h *httpTransport) Dial(addr string, opts ...DialOption) (Client, error) {
 	dopts := DialOptions{
 		Timeout: DefaultDialTimeout,

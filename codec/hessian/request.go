@@ -157,7 +157,7 @@ func packRequest(m *codec.Message, b interface{}, w io.Writer) error {
 		ok              bool
 		args            []interface{}
 		pkgLen          int
-		sirializationID = byte(78) // java 中标识一个class的ID
+		sirializationID = byte(0xFB) // java 中标识一个class的ID
 	)
 
 	if args, ok = b.([]interface{}); !ok {

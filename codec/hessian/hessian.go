@@ -11,7 +11,6 @@
 package hessian
 
 import (
-	"bytes"
 	"io"
 )
 
@@ -25,7 +24,6 @@ import (
 )
 
 type hessianCodec struct {
-	buf *bytes.Buffer
 	mt  codec.MessageType
 	rwc io.ReadWriteCloser
 	// c   *clientCodec
@@ -33,19 +31,17 @@ type hessianCodec struct {
 }
 
 func (h *hessianCodec) Close() error {
-	h.buf.Reset()
 	return h.rwc.Close()
 }
 
 func (h *hessianCodec) String() string {
-	return "hessian codec"
+	return "hessian-codec"
 }
 
 func (h *hessianCodec) Write(m *codec.Message, b interface{}) error {
 	gxlog.CInfo("@m:%+v, b:%+v", m, b)
 	switch m.Type {
 	case codec.Request:
-		h.buf.Reset()
 		return jerrors.Trace(packRequest(m, b, h.rwc))
 	case codec.Response:
 		// return h.s.Write(m, b)
@@ -57,10 +53,7 @@ func (h *hessianCodec) Write(m *codec.Message, b interface{}) error {
 }
 
 func (h *hessianCodec) ReadHeader(m *codec.Message, mt codec.MessageType) error {
-	h.buf.Reset()
 	h.mt = mt
-
-	gxlog.CError("get response header")
 
 	switch mt {
 	case codec.Request:
@@ -87,7 +80,6 @@ func (h *hessianCodec) ReadBody(b interface{}) error {
 
 func NewCodec(rwc io.ReadWriteCloser) codec.Codec {
 	return &hessianCodec{
-		buf: bytes.NewBuffer(nil),
 		rwc: rwc,
 		// c:   newClientCodec(rwc),
 		// s:   newServerCodec(rwc, nil),

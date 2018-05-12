@@ -31,7 +31,7 @@ import (
 // It also supports bidirectional streaming of requests.
 type Client interface {
 	Options() Options
-	NewRequest(version, service, method string, args interface{}, reqOpts ...RequestOption) Request
+	NewRequest(group, version, service, method string, args interface{}, reqOpts ...RequestOption) Request
 	Call(ctx context.Context, req Request, rsp interface{}, opts ...CallOption) error
 	String() string
 	Close()

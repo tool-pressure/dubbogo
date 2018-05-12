@@ -105,7 +105,7 @@ func (r *rpcClient) next(request Request, opts CallOptions) (selector.Next, erro
 	}
 
 	// get next nodes from the selector
-	gxlog.CInfo("selector.Select ServiceConfig:%#v", request.ServiceConfig())
+	gxlog.CInfo("request:%#v, selector.Select ServiceConfig:%#v", request, request.ServiceConfig())
 	return r.opts.Selector.Select(request.ServiceConfig())
 }
 
@@ -152,7 +152,10 @@ func (c *rpcClient) call(ctx context.Context, reqID int64, service registry.Serv
 		}
 	}
 
-	var gerr error
+	var (
+		gerr  error
+		topts *transport.Options
+	)
 	conn, err := c.pool.getConn(
 		c.opts.CodecType.String(),
 		service.Location,
@@ -163,6 +166,9 @@ func (c *rpcClient) call(ctx context.Context, reqID int64, service registry.Serv
 	if err != nil {
 		return common.InternalServerError("dubbogo.client", fmt.Sprintf("Error sending request: %v", err))
 	}
+	topts = c.opts.Transport.Options()
+	topts.Addrs = append(topts.Addrs, service.Location)
+	topts.Timeout = reqTimeout
 
 	stream := &rpcStream{
 		seq:        reqID,
@@ -289,7 +295,6 @@ func (c *rpcClient) Call(ctx context.Context, request Request, response interfac
 			return common.InternalServerError("dubbogo.client", err.Error())
 		}
 
-		log.Debug("request:%+v, call serviceURL:%s", request, serviceURL)
 		err = c.call(ctx, reqID, *serviceURL, request, response, callOpts)
 		log.Debug("@i{%d}, call(ID{%v}, ctx{%v}, serviceURL{%s}, request{%v}, response{%v}) = err{%v}",
 			i, reqID, ctx, serviceURL, request, response, err)
@@ -328,12 +333,12 @@ func (c *rpcClient) Options() Options {
 	return c.opts
 }
 
-func (c *rpcClient) NewRequest(version, service, method string, args interface{}, reqOpts ...RequestOption) Request {
+func (c *rpcClient) NewRequest(group, version, service, method string, args interface{}, reqOpts ...RequestOption) Request {
 	codecType := c.opts.CodecType.String()
 	if dubbogoClientConfigMap[c.opts.CodecType].transportType == codec.TRANSPORT_TCP {
 		reqOpts = append(reqOpts, StreamingRequest())
 	}
-	return newRpcRequest(codecType, version, service, method, args, codec2ContentType[codecType], reqOpts...)
+	return newRpcRequest(group, codecType, version, service, method, args, codec2ContentType[codecType], reqOpts...)
 }
 
 func (c *rpcClient) String() string {

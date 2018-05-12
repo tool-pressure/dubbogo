@@ -136,19 +136,43 @@ func (t *tcpTransportClient) Send(p *Package) error {
 	return nil
 }
 
+// tcp connection read
+func (t *tcpTransportClient) read() (Package, error) {
+	var (
+		ok       bool
+		err      error
+		netError net.Error
+		bufLen   int
+		buf      []byte
+		p        Package
+	)
+
+	buf = make([]byte, 4096)
+	for {
+		bufLen = 0
+		bufLen, err = t.conn.Read(buf)
+		if err != nil {
+			if netError, ok = err.(net.Error); ok && netError.Timeout() {
+				continue
+			}
+			return p, jerrors.Trace(err)
+		}
+		p.Body = append(p.Body, buf[:bufLen]...)
+	}
+
+	return p, nil
+}
+
 func (t *tcpTransportClient) Recv(p *Package) error {
 	if t.t.opts.Timeout > time.Duration(0) {
 		common.SetNetConnTimeout(t.conn, t.t.opts.Timeout)
 		defer common.SetNetConnTimeout(t.conn, 0)
 	}
+	gxlog.CInfo("timeout %s", t.t.opts.Timeout)
 
-	if p.Body == nil {
-		p.Body = make([]byte, 0, 128)
-	}
-	buf := make([]byte, 0, 1024)
-	// l, err := t.conn.Read(p.Body)
-	l, err := t.conn.Read(buf)
-	gxlog.CWarn("rsp return len %d, err:%v", l, err)
+	var err error
+	*p, err = t.read()
+	gxlog.CWarn("rsp return len %d, err:%v", len(p.Body), err)
 
 	return jerrors.Trace(err)
 }
@@ -247,6 +271,10 @@ type tcpTransport struct {
 	opts Options
 }
 
+func (t *tcpTransport) Options() *Options {
+	return &t.opts
+}
+
 func (t *tcpTransport) Dial(addr string, opts ...DialOption) (Client, error) {
 	dopts := DialOptions{
 		Timeout: DefaultDialTimeout,
@@ -254,8 +282,6 @@ func (t *tcpTransport) Dial(addr string, opts ...DialOption) (Client, error) {
 	for _, opt := range opts {
 		opt(&dopts)
 	}
-
-	gxlog.CError("connect address:%s", addr)
 
 	conn, err := net.DialTimeout("tcp", addr, dopts.Timeout)
 	if err != nil {

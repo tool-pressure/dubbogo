@@ -41,6 +41,7 @@ type Listener interface {
 // Transport is an interface which is used for communication between
 // services. It uses socket send/recv semantics.
 type Transport interface {
+	Options() *Options
 	Dial(addr string, opts ...DialOption) (Client, error)
 	Listen(addr string, opts ...ListenOption) (Listener, error)
 	String() string

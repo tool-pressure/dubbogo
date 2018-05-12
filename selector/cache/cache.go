@@ -66,14 +66,23 @@ func (c *cacheSelector) copy(current []*registry.ServiceURL) []*registry.Service
 func (c *cacheSelector) get(s registry.ServiceConfigIf) ([]*registry.ServiceURL, error) {
 	c.Lock()
 	defer c.Unlock()
+
 	log.Debug("c.get(@s:%#v)", s)
 
 	// check the cache first
-	serviceConf, _ := s.(registry.ServiceConfig)
-	services, o := c.cache[serviceConf.Service]
-	ttl, k := c.ttls[serviceConf.Service]
+	var serviceConf registry.ServiceConfig
+	if scp, ok := s.(*registry.ServiceConfig); ok {
+		serviceConf = *scp
+	} else if sc, ok := s.(registry.ServiceConfig); ok {
+		serviceConf = sc
+	} else {
+		return nil, jerrors.Errorf("illegal @s:%#v", s)
+	}
+
+	services, o := c.cache[serviceConf.Key()]
+	ttl, k := c.ttls[serviceConf.Key()]
 	// log.Debug("c.cache[service{%v}] = services{%v}", serviceConf.Service, services)
-	log.Debug("c.cache[service{%v}] = services{%v}", serviceConf, services)
+	log.Debug("c.cache[service{%#v}] = services{%v}", serviceConf, services)
 
 	// got results, copy and return
 	if o && len(services) > 0 {
@@ -100,8 +109,8 @@ func (c *cacheSelector) get(s registry.ServiceConfigIf) ([]*registry.ServiceURL,
 	}
 
 	// we didn't have any results so cache
-	c.cache[serviceConf.Service] = c.copy(ss)
-	c.ttls[serviceConf.Service] = time.Now().Add(c.ttl)
+	c.cache[serviceConf.Key()] = c.copy(ss)
+	c.ttls[serviceConf.Key()] = time.Now().Add(c.ttl)
 	return ss, nil
 }
 
@@ -268,6 +277,8 @@ func (c *cacheSelector) Select(service registry.ServiceConfigIf) (selector.Next,
 		err      error
 		services []*registry.ServiceURL
 	)
+
+	log.Debug("@service:%#v", service)
 
 	// get the service
 	// try the cache first
