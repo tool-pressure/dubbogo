@@ -129,7 +129,8 @@ func (c *consumerZookeeperRegistry) register(conf *registry.ServiceConfig) error
 
 	err = c.validateZookeeperClient()
 	if err != nil {
-		return err
+		log.Error("client.validateZookeeperClient() = err:%#v", err)
+		return jerrors.Trace(err)
 	}
 	// 创建服务下面的consumer node
 	dubboPath = fmt.Sprintf("/dubbo/%s/%s", conf.Service, DubboNodes[CONSUMER])
@@ -137,8 +138,8 @@ func (c *consumerZookeeperRegistry) register(conf *registry.ServiceConfig) error
 	err = c.client.Create(dubboPath)
 	c.Unlock()
 	if err != nil {
-		log.Error("zkClient.create(path{%s}) = error{%v}", dubboPath, err)
-		return err
+		log.Error("zkClient.create(path{%s}) = error{%v}", dubboPath, jerrors.ErrorStack(err))
+		return jerrors.Trace(err)
 	}
 	// 创建服务下面的provider node，以方便watch直接观察provider下面的新注册的服务
 	dubboPath = fmt.Sprintf("/dubbo/%s/%s", conf.Service, DubboNodes[PROVIDER])
@@ -146,8 +147,8 @@ func (c *consumerZookeeperRegistry) register(conf *registry.ServiceConfig) error
 	err = c.client.Create(dubboPath)
 	c.Unlock()
 	if err != nil {
-		log.Error("zkClient.create(path{%s}) = error{%v}", dubboPath, err)
-		return err
+		log.Error("zkClient.create(path{%s}) = error{%v}", dubboPath, jerrors.ErrorStack(err))
+		return jerrors.Trace(err)
 	}
 
 	params = url.Values{}
@@ -185,7 +186,7 @@ func (c *consumerZookeeperRegistry) register(conf *registry.ServiceConfig) error
 	log.Debug("consumer path:%s, url:%s", dubboPath, rawURL)
 	err = c.registerTempZookeeperNode(dubboPath, encodedURL)
 	if err != nil {
-		return err
+		return jerrors.Trace(err)
 	}
 
 	return nil
@@ -224,7 +225,8 @@ LOOP:
 				case <-time.After(common.TimeSecondDuration(failTimes * registry.REGISTRY_CONN_DELAY)): // 防止疯狂重连zk
 				}
 				err = c.validateZookeeperClient()
-				log.Info("consumerZookeeperRegistry.validateZookeeperClient(zkAddrs{%s}) = error{%#v}", c.client.zkAddrs, err)
+				log.Info("consumerZookeeperRegistry.validateZookeeperClient(zkAddrs{%s}) = error{%#v}",
+					c.client.zkAddrs, jerrors.ErrorStack(err))
 				if err == nil {
 					// copy c.services
 					c.Lock()
@@ -238,7 +240,7 @@ LOOP:
 						err = c.register(confIf.(*registry.ServiceConfig))
 						if err != nil {
 							log.Error("in (consumerZookeeperRegistry)reRegister, (consumerZookeeperRegistry)register(conf{%#v}) = error{%#v}",
-								confIf.(*registry.ServiceConfig), err)
+								confIf.(*registry.ServiceConfig), jerrors.ErrorStack(err))
 							flag = false
 							break
 						}
@@ -271,14 +273,14 @@ func (c *consumerZookeeperRegistry) Watch() (registry.Watcher, error) {
 	client, err = newZookeeperClient(WatcherZkClient, c.Address, c.RegistryConfig.Timeout)
 	if err != nil {
 		log.Warn("newZookeeperClient(name:%s, zk addresss{%v}, timeout{%d}) = error{%v}",
-			WatcherZkClient, c.Address, c.Timeout, err)
-		return nil, err
+			WatcherZkClient, c.Address, c.Timeout, jerrors.ErrorStack(err))
+		return nil, jerrors.Trace(err)
 	}
 	iWatcher, err = newZookeeperWatcher(client)
 	if err != nil {
 		client.Close()
-		log.Warn("newZookeeperWatcher() = error{%v}", err)
-		return nil, err
+		log.Warn("newZookeeperWatcher() = error{%v}", jerrors.ErrorStack(err))
+		return nil, jerrors.Trace(err)
 	}
 	zkWatcher = iWatcher.(*zookeeperWatcher)
 
@@ -334,14 +336,14 @@ func (c *consumerZookeeperRegistry) GetServices(i registry.ServiceConfigIf) ([]*
 	dubboPath = fmt.Sprintf("/dubbo/%s/providers", sc.Service)
 	err = c.validateZookeeperClient()
 	if err != nil {
-		return nil, err
+		return nil, jerrors.Trace(err)
 	}
 	c.Lock()
 	nodes, err = c.client.getChildren(dubboPath)
 	c.Unlock()
 	if err != nil {
 		log.Warn("getChildren(dubboPath{%s}) = error{%v}", dubboPath, err)
-		return nil, err
+		return nil, jerrors.Trace(err)
 	}
 
 	var serviceMap = make(map[string]*registry.ServiceURL)

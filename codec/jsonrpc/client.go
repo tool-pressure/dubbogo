@@ -45,8 +45,7 @@ type clientResponse struct {
 	Version string           `json:"jsonrpc"`
 	ID      int64            `json:"id"`
 	Result  *json.RawMessage `json:"result,omitempty"`
-	// Error   *json.RawMessage `json:"error"`
-	Error *Error `json:"error,omitempty"`
+	Error   *Error           `json:"error,omitempty"`
 }
 
 func (r *clientResponse) reset() {

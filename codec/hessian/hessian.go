@@ -12,6 +12,7 @@ package hessian
 
 import (
 	"io"
+	"reflect"
 )
 
 import (
@@ -24,10 +25,9 @@ import (
 )
 
 type hessianCodec struct {
-	mt  codec.MessageType
-	rwc io.ReadWriteCloser
-	// c   *clientCodec
-	// s   *serverCodec
+	mt           codec.MessageType
+	rwc          io.ReadWriteCloser
+	rspHeaderLen int
 }
 
 func (h *hessianCodec) Close() error {
@@ -38,13 +38,13 @@ func (h *hessianCodec) String() string {
 	return "hessian-codec"
 }
 
-func (h *hessianCodec) Write(m *codec.Message, b interface{}) error {
-	gxlog.CInfo("@m:%+v, b:%+v", m, b)
+func (h *hessianCodec) Write(m *codec.Message, a interface{}) error {
+	gxlog.CInfo("@m:%+v, @a:%+v", m, a)
 	switch m.Type {
 	case codec.Request:
-		return jerrors.Trace(packRequest(m, b, h.rwc))
+		return jerrors.Trace(packRequest(m, a, h.rwc))
 	case codec.Response:
-		// return h.s.Write(m, b)
+		return nil
 	default:
 		return jerrors.Errorf("Unrecognised message type: %v", m.Type)
 	}
@@ -54,34 +54,78 @@ func (h *hessianCodec) Write(m *codec.Message, b interface{}) error {
 
 func (h *hessianCodec) ReadHeader(m *codec.Message, mt codec.MessageType) error {
 	h.mt = mt
+	h.rspHeaderLen = 0
 
 	switch mt {
 	case codec.Request:
-		// return h.s.ReadHeader(m)
+		return nil
 	case codec.Response:
-		// return h.c.ReadHeader(m)
+		var buf [HEADER_LENGTH]byte
+		n, e := h.rwc.Read(buf[:])
+		if e != nil {
+			return jerrors.Trace(e)
+		}
+		if n < HEADER_LENGTH {
+			return codec.ErrHeaderNotEnough
+		}
+
+		h.rspHeaderLen, e = UnpackResponseHeader(buf[:], m)
+		return jerrors.Trace(e)
+
 	default:
 		return jerrors.Errorf("Unrecognised message type: %v", mt)
 	}
+
 	return nil
 }
 
 func (h *hessianCodec) ReadBody(b interface{}) error {
 	switch h.mt {
 	case codec.Request:
-		// return h.s.ReadBody(b)
+		return nil
 	case codec.Response:
-		// return h.c.ReadBody(b)
+		if b == nil {
+			return jerrors.Errorf("@b is nil")
+		}
+
+		buf := make([]byte, h.rspHeaderLen)
+		n, e := h.rwc.Read(buf)
+		if e != nil {
+			return jerrors.Trace(e)
+		}
+		if n < h.rspHeaderLen {
+			return codec.ErrBodyNotEnough
+		}
+
+		rsp, err := UnpackResponseBody(buf)
+		if err != nil {
+			return jerrors.Trace(err)
+		}
+
+		bv := reflect.ValueOf(b)
+		switch bv.Kind() {
+		case reflect.Ptr:
+			rspValue := ReflectResponse(rsp, reflect.TypeOf(b).Elem())
+			gxlog.CError("rspValue:%#v", rspValue)
+			bv.Elem().Set(reflect.ValueOf(rspValue))
+
+		default:
+			err = jerrors.Errorf("@b:{%#v} reflection kind shoud be reflect.Ptr", b)
+		}
+
+		gxlog.CError("@b:%#v", b)
+
+		return jerrors.Trace(err)
+
 	default:
 		return jerrors.Errorf("Unrecognised message type: %v", h.mt)
 	}
+
 	return nil
 }
 
 func NewCodec(rwc io.ReadWriteCloser) codec.Codec {
 	return &hessianCodec{
 		rwc: rwc,
-		// c:   newClientCodec(rwc),
-		// s:   newServerCodec(rwc, nil),
 	}
 }

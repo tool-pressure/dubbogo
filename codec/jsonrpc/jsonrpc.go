@@ -1,7 +1,6 @@
 package jsonrpc
 
 import (
-	"bytes"
 	"io"
 )
 
@@ -14,7 +13,6 @@ import (
 )
 
 type jsonCodec struct {
-	buf *bytes.Buffer
 	mt  codec.MessageType
 	rwc io.ReadWriteCloser
 	c   *clientCodec
@@ -22,7 +20,6 @@ type jsonCodec struct {
 }
 
 func (j *jsonCodec) Close() error {
-	j.buf.Reset()
 	return j.rwc.Close()
 }
 
@@ -42,7 +39,6 @@ func (j *jsonCodec) Write(m *codec.Message, b interface{}) error {
 }
 
 func (j *jsonCodec) ReadHeader(m *codec.Message, mt codec.MessageType) error {
-	j.buf.Reset()
 	j.mt = mt
 
 	switch mt {
@@ -70,7 +66,6 @@ func (j *jsonCodec) ReadBody(b interface{}) error {
 
 func NewCodec(rwc io.ReadWriteCloser) codec.Codec {
 	return &jsonCodec{
-		buf: bytes.NewBuffer(nil),
 		rwc: rwc,
 		c:   newClientCodec(rwc),
 		s:   newServerCodec(rwc, nil),

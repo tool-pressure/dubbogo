@@ -391,7 +391,7 @@ func (z *zookeeperClient) getChildren(path string) ([]string, error) {
 		if err == zk.ErrNoNode {
 			return nil, jerrors.Errorf("path{%s} has none children", path)
 		}
-		log.Error("zk.Children(path{%s}) = error(%v)", path, err)
+		log.Error("zk.Children(path{%s}) = error(%v)", path, jerrors.ErrorStack(err))
 		return nil, jerrors.Annotatef(err, "zk.Children(path:%s)", path)
 	}
 	if stat == nil {

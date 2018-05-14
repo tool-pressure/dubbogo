@@ -107,7 +107,7 @@ func newZookeeperRegistry(opts registry.Options) (*zookeeperRegistry, error) {
 	}
 	err = r.validateZookeeperClient()
 	if err != nil {
-		return nil, jerrors.Annotate(err, "validateZookeeperClient()")
+		return nil, jerrors.Trace(err)
 	}
 
 	r.services = make(map[string]registry.ServiceConfigIf)
@@ -127,7 +127,7 @@ func (r *zookeeperRegistry) validateZookeeperClient() error {
 		r.client, err = newZookeeperClient(RegistryZkClient, r.Address, r.RegistryConfig.Timeout)
 		if err != nil {
 			log.Warn("newZookeeperClient(name{%s}, zk addresss{%v}, timeout{%d}) = error{%v}",
-				RegistryZkClient, r.Address, r.Timeout, err)
+				RegistryZkClient, r.Address, r.Timeout, jerrors.ErrorStack(err))
 		}
 	}
 
@@ -152,13 +152,13 @@ func (r *zookeeperRegistry) registerZookeeperNode(root string, data []byte) erro
 	defer r.Unlock()
 	err = r.client.Create(root)
 	if err != nil {
-		log.Error("zk.Create(root{%s}) = err{%v}", root, err)
+		log.Error("zk.Create(root{%s}) = err{%v}", root, jerrors.ErrorStack(err))
 		return jerrors.Annotatef(err, "zkclient.Create(root:%s)", root)
 	}
 	zkPath, err = r.client.RegisterTempSeq(root, data)
 	// 创建完临时节点，zkPath = /dubbo/com.ofpay.demo.api.UserProvider/consumers/jsonrpc/0000000000
 	if err != nil {
-		log.Error("createTempSeqNode(root{%s}) = error{%v}", root, err)
+		log.Error("createTempSeqNode(root{%s}) = error{%v}", root, jerrors.ErrorStack(err))
 		return jerrors.Annotatef(err, "createTempSeqNode(root{%s})", root)
 	}
 	// r.registers[root] = string(data) // root = /dubbo/com.ofpay.demo.api.UserProvider/consumers/jsonrpc
@@ -177,13 +177,13 @@ func (r *zookeeperRegistry) registerTempZookeeperNode(root string, node string) 
 	defer r.Unlock()
 	err = r.client.Create(root)
 	if err != nil {
-		log.Error("zk.Create(root{%s}) = err{%v}", root, err)
+		log.Error("zk.Create(root{%s}) = err{%v}", root, jerrors.ErrorStack(err))
 		return jerrors.Annotatef(err, "zk.Create(root{%s})", root)
 		return err
 	}
 	zkPath, err = r.client.RegisterTemp(root, node)
 	if err != nil {
-		log.Error("RegisterTempNode(root{%s}, node{%s}) = error{%v}", root, node, err)
+		log.Error("RegisterTempNode(root{%s}, node{%s}) = error{%v}", root, node, jerrors.ErrorStack(err))
 		return jerrors.Annotatef(err, "RegisterTempNode(root{%s}, node{%s})", root, node)
 		return err
 	}

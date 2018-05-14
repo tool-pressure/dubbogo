@@ -24,7 +24,6 @@ import (
 
 import (
 	"github.com/AlexStocks/dubbogo/common"
-	"github.com/AlexStocks/goext/log"
 )
 
 const (
@@ -137,30 +136,24 @@ func (t *tcpTransportClient) Send(p *Package) error {
 }
 
 // tcp connection read
-func (t *tcpTransportClient) read() (Package, error) {
+func (t *tcpTransportClient) read(p *Package) error {
 	var (
-		ok       bool
-		err      error
-		netError net.Error
-		bufLen   int
-		buf      []byte
-		p        Package
+		err    error
+		bufLen int
+		buf    []byte
 	)
 
 	buf = make([]byte, 4096)
-	for {
-		bufLen = 0
-		bufLen, err = t.conn.Read(buf)
-		if err != nil {
-			if netError, ok = err.(net.Error); ok && netError.Timeout() {
-				continue
-			}
-			return p, jerrors.Trace(err)
-		}
-		p.Body = append(p.Body, buf[:bufLen]...)
+	bufLen, err = t.conn.Read(buf)
+	if err != nil {
+		return jerrors.Trace(err)
 	}
+	if bufLen == 0 {
+		return io.EOF
+	}
+	p.Body = append(p.Body, buf[:bufLen]...)
 
-	return p, nil
+	return nil
 }
 
 func (t *tcpTransportClient) Recv(p *Package) error {
@@ -168,13 +161,8 @@ func (t *tcpTransportClient) Recv(p *Package) error {
 		common.SetNetConnTimeout(t.conn, t.t.opts.Timeout)
 		defer common.SetNetConnTimeout(t.conn, 0)
 	}
-	gxlog.CInfo("timeout %s", t.t.opts.Timeout)
 
-	var err error
-	*p, err = t.read()
-	gxlog.CWarn("rsp return len %d, err:%v", len(p.Body), err)
-
-	return jerrors.Trace(err)
+	return jerrors.Trace(t.read(p))
 }
 
 func (t *tcpTransportClient) Close() error {

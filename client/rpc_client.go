@@ -180,10 +180,11 @@ func (c *rpcClient) call(ctx context.Context, reqID int64, service registry.Serv
 	}
 
 	defer func() {
-		log.Debug("check request{%#v}, stream condition before store the conn object into pool", req)
 		// defer execution of release
 		if req.Stream() {
 			// 只缓存长连接
+			log.Debug("store connection:{protocol:%s, location:%s, conn:%#v}, gerr:%#v",
+				req.Protocol(), service.Location, conn, gerr)
 			c.pool.release(req.Protocol(), service.Location, conn, gerr)
 		}
 
@@ -267,13 +268,16 @@ func (c *rpcClient) Call(ctx context.Context, request Request, response interfac
 
 	// check if we already have a deadline
 	d, ok := ctx.Deadline()
+	log.Debug("ctx:%#v, d:%#v, ok:%v", ctx, d, ok)
 	if !ok {
 		// no deadline so we create a new one
+		log.Debug("create timeout context, timeout:%v", callOpts.RequestTimeout)
 		ctx, _ = context.WithTimeout(ctx, callOpts.RequestTimeout)
 	} else {
 		// got a deadline so no need to setup context
 		// but we need to set the timeout we pass along
 		opt := WithRequestTimeout(d.Sub(time.Now()))
+		log.Debug("WithRequestTimeout:%#v", d.Sub(time.Now()))
 		opt(&callOpts)
 	}
 
@@ -314,7 +318,7 @@ func (c *rpcClient) Call(ctx context.Context, request Request, response interfac
 
 		select {
 		case <-ctx.Done():
-			log.Error("reqID{%d}, @i{%d}, ctx.Done()", reqID, i)
+			log.Error("reqID{%d}, @i{%d}, ctx.Done(), ctx.Err:%#v", reqID, i, ctx.Err())
 			return common.NewError("dubbogo.client", fmt.Sprintf("%v", ctx.Err()), 408)
 		case err := <-ch:
 			log.Debug("reqID{%d}, err:%+v", reqID, err)

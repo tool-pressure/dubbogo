@@ -5,11 +5,20 @@ import (
 	"time"
 )
 
+import (
+	jerrors "github.com/juju/errors"
+)
+
 const (
 	Error MessageType = iota
 	Request
 	Response
 	Heartbeat
+)
+
+var (
+	ErrHeaderNotEnough = jerrors.Errorf("header buffer too short")
+	ErrBodyNotEnough   = jerrors.Errorf("body buffer too short")
 )
 
 type MessageType int

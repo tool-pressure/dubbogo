@@ -147,7 +147,7 @@ func getArgsTypeList(args []interface{}) (string, error) {
 	return types, nil
 }
 
-func packRequest(m *codec.Message, b interface{}, w io.Writer) error {
+func packRequest(m *codec.Message, a interface{}, w io.Writer) error {
 	var (
 		err             error
 		types           string
@@ -160,7 +160,7 @@ func packRequest(m *codec.Message, b interface{}, w io.Writer) error {
 		sirializationID = byte(0xFB) // java 中标识一个class的ID
 	)
 
-	if args, ok = b.([]interface{}); !ok {
+	if args, ok = a.([]interface{}); !ok {
 		return jerrors.Errorf("@b is not of type: []interface{}")
 	}
 

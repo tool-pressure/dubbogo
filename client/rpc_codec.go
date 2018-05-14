@@ -18,7 +18,6 @@ import (
 )
 
 import (
-	log "github.com/AlexStocks/log4go"
 	jerrors "github.com/juju/errors"
 )
 
@@ -126,7 +125,6 @@ func (c *rpcCodec) WriteRequest(req *request, args interface{}) error {
 	}
 	// get binary stream
 	c.pkg.Body = c.buf.wbuf.Bytes()
-	log.Info("after codec.Write, codec message:%+v", m)
 	// tcp 层不使用 transport.Package.Header, codec.Write 调用之后其所有内容已经序列化进 transport.Package.Body
 	if c.pkg.Header != nil {
 		for k, v := range m.Header {
@@ -137,17 +135,23 @@ func (c *rpcCodec) WriteRequest(req *request, args interface{}) error {
 }
 
 func (c *rpcCodec) ReadResponseHeader(r *response) error {
-	var p transport.Package
-	if err := c.client.Recv(&p); err != nil {
+	var (
+		err error
+		p   transport.Package
+		cm  codec.Message
+	)
+
+	err = c.client.Recv(&p)
+	if err != nil {
 		return jerrors.Trace(err)
 	}
 	c.buf.rbuf.Reset()
 	c.buf.rbuf.Write(p.Body)
-	var cm codec.Message
-	err := c.codec.ReadHeader(&cm, codec.Response)
+	err = c.codec.ReadHeader(&cm, codec.Response)
 	r.ServiceMethod = cm.Method
 	r.Seq = cm.Id
 	r.Error = cm.Error
+
 	return jerrors.Trace(err)
 }
 

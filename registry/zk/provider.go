@@ -72,8 +72,8 @@ func (s *providerZookeeperRegistry) validateZookeeperClient() error {
 	if s.client == nil {
 		s.client, err = newZookeeperClient(ProviderRegistryZkClient, s.Address, s.RegistryConfig.Timeout)
 		if err != nil {
-			log.Warn("newZookeeperClient(name{%s}, zk addresss{%v}, timeout{%d}) = error{%v}",
-				ProviderRegistryZkClient, s.Address, s.Timeout, err)
+			log.Warn("newZookeeperClient(name{%s}, zk addresss{%v}, timeout{%d}) = error{%#v}",
+				ProviderRegistryZkClient, s.Address, s.Timeout, jerrors.ErrorStack(err))
 		}
 	}
 	s.Unlock()
@@ -133,7 +133,7 @@ func (s *providerZookeeperRegistry) register(conf *registry.ProviderServiceConfi
 
 	err = s.validateZookeeperClient()
 	if err != nil {
-		return err
+		return jerrors.Trace(err)
 	}
 	// 先创建服务下面的provider node
 	dubboPath = fmt.Sprintf("/dubbo/%s/%s", conf.Service, DubboNodes[PROVIDER])
@@ -141,7 +141,7 @@ func (s *providerZookeeperRegistry) register(conf *registry.ProviderServiceConfi
 	err = s.client.Create(dubboPath)
 	s.Unlock()
 	if err != nil {
-		log.Error("zkClient.create(path{%s}) = error{%v}", dubboPath, err)
+		log.Error("zkClient.create(path{%s}) = error{%#v}", dubboPath, jerrors.ErrorStack(err))
 		return jerrors.Annotatef(err, "zkclient.Create(path:%s)", dubboPath)
 	}
 
@@ -233,7 +233,8 @@ LOOP:
 				case <-time.After(common.TimeSecondDuration(failTimes * registry.REGISTRY_CONN_DELAY)): // 防止疯狂重连zk
 				}
 				err = s.validateZookeeperClient()
-				log.Info("providerZookeeperRegistry.validateZookeeperClient(zkAddr{%s}) = error{%#v}", s.client.zkAddrs, err)
+				log.Info("providerZookeeperRegistry.validateZookeeperClient(zkAddr{%s}) = error{%#v}",
+					s.client.zkAddrs, jerrors.ErrorStack(err))
 				if err == nil {
 					// copy s.services
 					s.Lock()
@@ -246,8 +247,8 @@ LOOP:
 					for _, confIf = range services {
 						err = s.register(confIf.(*registry.ProviderServiceConfig))
 						if err != nil {
-							log.Error("in (providerZookeeperRegistry)reRegister, (providerZookeeperRegistry)register(conf{%#v}) = error{%#v}",
-								confIf.(*registry.ProviderServiceConfig), err)
+							log.Error("(providerZookeeperRegistry)register(conf{%#v}) = error{%#v}",
+								confIf.(*registry.ProviderServiceConfig), jerrors.ErrorStack(err))
 							flag = false
 							break
 						}

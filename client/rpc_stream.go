@@ -102,7 +102,7 @@ func (r *rpcStream) Recv(msg interface{}) error {
 			r.err = io.ErrUnexpectedEOF
 			return io.ErrUnexpectedEOF
 		}
-		log.Warn("msg{%v}, err{%#v}", msg, err)
+		log.Warn("msg{%v}, err{%#v}", msg, jerrors.ErrorStack(err))
 		r.err = err
 		return jerrors.Trace(err)
 	}
@@ -120,6 +120,7 @@ func (r *rpcStream) Recv(msg interface{}) error {
 		if err := r.codec.ReadResponseBody(nil); err != nil {
 			r.err = jerrors.Trace(err)
 		}
+
 	default:
 		if err := r.codec.ReadResponseBody(msg); err != nil {
 			r.err = jerrors.Trace(err)
