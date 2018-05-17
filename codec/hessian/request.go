@@ -172,7 +172,7 @@ func packRequest(m *codec.Message, a interface{}, w io.Writer) error {
 	// serialization id, two way flag, event, request/response flag
 	byteArray[2] |= byte(sirializationID & SERIALIZATION_MASK)
 	// request id
-	binary.BigEndian.PutUint64(byteArray[4:], uint64(m.Id))
+	binary.BigEndian.PutUint64(byteArray[4:], uint64(m.ID))
 	encoder.Append(byteArray[:HEADER_LENGTH])
 
 	// com.alibaba.dubbo.rpc.protocol.dubbo.DubboCodec.DubboCodec.java line144 encodeRequestData

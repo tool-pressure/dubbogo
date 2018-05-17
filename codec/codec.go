@@ -10,15 +10,16 @@ import (
 )
 
 const (
-	Error MessageType = iota
-	Request
-	Response
-	Heartbeat
+	Error     MessageType = 0x01
+	Request               = 0x02
+	Response              = 0x04
+	Heartbeat             = 0x08
 )
 
 var (
 	ErrHeaderNotEnough = jerrors.Errorf("header buffer too short")
 	ErrBodyNotEnough   = jerrors.Errorf("body buffer too short")
+	ErrIllegalPackage  = jerrors.Errorf("illegal pacakge!")
 )
 
 type MessageType int
@@ -35,7 +36,7 @@ type Codec interface {
 }
 
 type Message struct {
-	Id          int64
+	ID          int64
 	Version     string
 	Type        MessageType
 	ServicePath string // service path
@@ -44,4 +45,5 @@ type Message struct {
 	Timeout     time.Duration // request timeout
 	Error       string
 	Header      map[string]string
+	BodyLen     int
 }

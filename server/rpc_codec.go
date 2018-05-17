@@ -90,7 +90,7 @@ func (c *rpcCodec) ReadRequestHeader(r *request, first bool) error {
 	err := c.codec.ReadHeader(&m, codec.Request)
 	r.Service = m.Target
 	r.Method = m.Method
-	r.Seq = m.Id
+	r.Seq = m.ID
 	return err
 }
 
@@ -103,7 +103,7 @@ func (c *rpcCodec) WriteResponse(r *response, body interface{}, last bool) error
 	m := &codec.Message{
 		Target: r.Service,
 		Method: r.Method,
-		Id:     r.Seq,
+		ID:     r.Seq,
 		Error:  r.Error,
 		Type:   codec.Response,
 		Header: map[string]string{},

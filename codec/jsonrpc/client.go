@@ -106,9 +106,9 @@ func (c *clientCodec) Write(m *codec.Message, param interface{}) error {
 	c.req.Method = m.Method
 	// c.req.Params = b
 	c.req.Params = param
-	c.req.ID = m.Id & MAX_JSONRPC_ID
+	c.req.ID = m.ID & MAX_JSONRPC_ID
 	c.Lock()
-	// c.pending[m.Id] = m.Method // 此处如果用m.Id会导致error: can not find method of response id 280698512
+	// c.pending[m.ID] = m.Method // 此处如果用m.ID会导致error: can not find method of response id 280698512
 	c.pending[c.req.ID] = m.Method
 	c.Unlock()
 
@@ -142,7 +142,7 @@ func (c *clientCodec) ReadHeader(m *codec.Message) error {
 	c.Unlock()
 
 	m.Error = ""
-	m.Id = c.resp.ID
+	m.ID = c.resp.ID
 	if c.resp.Error != nil {
 		// x, ok := c.resp.Error.(string)
 		// if !ok {

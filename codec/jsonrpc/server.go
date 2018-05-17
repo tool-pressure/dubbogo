@@ -186,7 +186,7 @@ func (c *serverCodec) ReadHeader(m *codec.Message) error {
 	c.seq++
 	c.pending[c.seq] = c.req.ID
 	c.req.ID = nil
-	m.Id = c.seq
+	m.ID = c.seq
 	c.mutex.Unlock()
 
 	return nil
@@ -266,12 +266,12 @@ func (c *serverCodec) Write(m *codec.Message, x interface{}) error {
 	)
 
 	c.mutex.Lock()
-	b, ok := c.pending[m.Id]
+	b, ok := c.pending[m.ID]
 	if !ok {
 		c.mutex.Unlock()
 		return errors.New("invalid sequence number in response")
 	}
-	delete(c.pending, m.Id)
+	delete(c.pending, m.ID)
 	c.mutex.Unlock()
 
 	if b == nil {
@@ -326,7 +326,7 @@ tcp stream example:
 0x00c0:  0a43 6f6e 7465 6e74 2d54 7970 653a 2061  .Content-Type:.a
 0x00d0:  7070 6c69 6361 7469 6f6e 2f6a 736f 6e0d  pplication/json.
 0x00e0:  0a54 696d 656f 7574 3a20 3235 3030 3030  .Timeout:.250000
-0x00f0:  3030 300d 0a58 2d46 726f 6d2d 4964 3a20  000..X-From-Id:.
+0x00f0:  3030 300d 0a58 2d46 726f 6d2d 4964 3a20  000..X-From-ID:.
 0x0100:  7363 7269 7074 0d0a 582d 5573 6572 2d49  script..X-User-I
 0x0110:  643a 206a 6f68 6e0d 0a0d 0a7b 226a 736f  d:.john....{"jso
 0x0120:  6e72 7063 223a 2232 2e30 222c 226d 6574  nrpc":"2.0","met

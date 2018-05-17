@@ -110,7 +110,7 @@ func newRpcCodec(req *transport.Package, client transport.Client, c codec.NewCod
 func (c *rpcCodec) WriteRequest(req *request, args interface{}) error {
 	c.buf.wbuf.Reset()
 	m := &codec.Message{
-		Id:          req.Seq,
+		ID:          req.Seq,
 		Version:     req.Version,
 		ServicePath: req.ServicePath,
 		Target:      req.Service,
@@ -141,22 +141,48 @@ func (c *rpcCodec) ReadResponseHeader(r *response) error {
 		cm  codec.Message
 	)
 
-	err = c.client.Recv(&p)
-	if err != nil {
-		return jerrors.Trace(err)
-	}
 	c.buf.rbuf.Reset()
-	c.buf.rbuf.Write(p.Body)
-	err = c.codec.ReadHeader(&cm, codec.Response)
+
+	for {
+		p.Reset()
+		err = c.client.Recv(&p)
+		if err != nil {
+			return jerrors.Trace(err)
+		}
+		c.buf.rbuf.Write(p.Body)
+		err = c.codec.ReadHeader(&cm, codec.Response)
+		if err != codec.ErrHeaderNotEnough {
+			break
+		}
+	}
+
 	r.ServiceMethod = cm.Method
-	r.Seq = cm.Id
+	r.Seq = cm.ID
 	r.Error = cm.Error
 
 	return jerrors.Trace(err)
 }
 
 func (c *rpcCodec) ReadResponseBody(b interface{}) error {
-	return c.codec.ReadBody(b)
+	var (
+		err error
+		p   transport.Package
+	)
+
+	for {
+		err = c.codec.ReadBody(b)
+		if err != codec.ErrBodyNotEnough {
+			return jerrors.Trace(err)
+		}
+		p.Reset()
+		err = c.client.Recv(&p)
+		if err != nil {
+			return jerrors.Trace(err)
+		}
+		c.buf.rbuf.Write(p.Body)
+	}
+
+	return nil
 }
 
 func (c *rpcCodec) Close() error {
