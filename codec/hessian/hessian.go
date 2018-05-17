@@ -69,7 +69,7 @@ func (h *hessianCodec) ReadHeader(m *codec.Message, mt codec.MessageType) error 
 			return codec.ErrHeaderNotEnough
 		}
 
-		h.rspHeaderLen, e = UnpackResponseHeader(buf[:], m)
+		//h.rspHeaderLen, e = UnpackResponseHeader(buf[:], m)
 		return jerrors.Trace(e)
 
 	default:
@@ -97,7 +97,8 @@ func (h *hessianCodec) ReadBody(b interface{}) error {
 			return codec.ErrBodyNotEnough
 		}
 
-		rsp, err := UnpackResponseBody(buf)
+		//rsp, err := UnpackResponseBody(buf)
+		var err error
 		if err != nil {
 			return jerrors.Trace(err)
 		}
