@@ -13,13 +13,13 @@ package server
 /*
 // consumer: rpc client -> rpc stream -> rpc codec -> transport + codec
 // provider: rpc server -> rpc stream -> rpc codec -> transport + codec
-func (this *server) handlePkg(servo interface{}, sock transport.Socket) {
-	sock.Recv(&msg) // msg = transport.Message
-	// func (r *rpcStream) Recv(msg interface{}) error {
+func (s *server) handlePkg(servo interface{}, sock transport.Socket) {
+	sock.Recv(&pkg) // pkg = transport.Package
+	// func (r *rpcStream) Recv(pkg interface{}) error {
 	// 	 r.codec.ReadRequestHeader(&req, false)
 	// 	 // func (c *rpcCodec) ReadRequestHeader(r *request, first bool) error
-	// 	 //   c.socket.Recv(&tm) // tm(transport.Message)
-	// 	 //   //  func (h *httpTransportSocket) Recv(m *Message) error { // 读取全部reqeust，并赋值给m(transport.Message)
+	// 	 //   c.socket.Recv(&tm) // tm(transport.Package)
+	// 	 //   //  func (h *httpTransportSocket) Recv(m *Message) error { // 读取全部reqeust，并赋值给m(transport.Package)
 	// 	 //   //    http.ReadRequest(h.buff)
 	// 	 //   //    ioutil.ReadAll(r.Body)
 	// 	 //   //    m.Target = m.Header["Path"]
@@ -42,11 +42,11 @@ func (this *server) handlePkg(servo interface{}, sock transport.Socket) {
 	// 	 //   r.Seq = m.Id
 	// 	 //   return err
 	// 	 // } //  (c *rpcCodec) ReadRequestHeader
-	// 	 r.codec.ReadRequestBody(msg)
+	// 	 r.codec.ReadRequestBody(pkg)
 	// }
 
-	codecFunc, err = this.newCodec(contentType) // dubbogo.codec
-	codec = newRpcCodec(&msg, sock, codecFunc)
+	codecFunc, err = s.newCodec(contentType) // dubbogo.codec
+	codec = newRpcCodec(&pkg, sock, codecFunc)
 	rpc.serveRequest(ctx, codec, contentType)
 	// func (server *server) serveRequest(ctx context.Context, codec serverCodec, ct string) error {
 	//   server.readRequest(codec)

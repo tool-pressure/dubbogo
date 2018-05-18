@@ -3,7 +3,6 @@ package transport
 import (
 	"context"
 	"time"
-	// "golang.org/x/net/context"
 )
 
 type Options struct {

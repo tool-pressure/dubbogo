@@ -2,10 +2,12 @@ package jsonrpc
 
 import (
 	"encoding/json"
-	"errors"
-	// "fmt"
 	"io"
 	"sync"
+)
+
+import (
+	jerrors "github.com/juju/errors"
 )
 
 import (
@@ -30,8 +32,8 @@ type serverCodec struct {
 	// When rpc responds, we use the sequence number in
 	// the response to find the original request ID.
 	mutex   sync.Mutex
-	seq     uint64
-	pending map[uint64]*json.RawMessage
+	seq     int64
+	pending map[int64]*json.RawMessage
 }
 
 // serverRequest represents a JSON-RPC request received by the server.
@@ -84,7 +86,7 @@ func newServerCodec(conn io.ReadWriteCloser, srv interface{}) *serverCodec {
 		enc:     json.NewEncoder(conn),
 		c:       conn,
 		srv:     srv,
-		pending: make(map[uint64]*json.RawMessage),
+		pending: make(map[int64]*json.RawMessage),
 	}
 }
 
@@ -103,32 +105,32 @@ func (r *serverRequest) UnmarshalJSON(raw []byte) error {
 	r.reset()
 	type req *serverRequest
 	if err := json.Unmarshal(raw, req(r)); err != nil {
-		return errors.New("bad request")
+		return jerrors.New("bad request")
 	}
 
 	var o = make(map[string]*json.RawMessage)
 	if err := json.Unmarshal(raw, &o); err != nil {
-		return errors.New("bad request")
+		return jerrors.New("bad request")
 	}
 	if o["jsonrpc"] == nil || o["method"] == nil {
-		return errors.New("bad request")
+		return jerrors.New("bad request")
 	}
 	_, okID := o["id"]
 	_, okParams := o["params"]
 	if len(o) == 3 && !(okID || okParams) || len(o) == 4 && !(okID && okParams) || len(o) > 4 {
-		return errors.New("bad request")
+		return jerrors.New("bad request")
 	}
 	if r.Version != Version {
-		return errors.New("bad request")
+		return jerrors.New("bad request")
 	}
 	if okParams {
 		if r.Params == nil || len(*r.Params) == 0 {
-			return errors.New("bad request")
+			return jerrors.New("bad request")
 		}
 		switch []byte(*r.Params)[0] {
 		case '[', '{':
 		default:
-			return errors.New("bad request")
+			return jerrors.New("bad request")
 		}
 	}
 	if okID && r.ID == nil {
@@ -136,11 +138,11 @@ func (r *serverRequest) UnmarshalJSON(raw []byte) error {
 	}
 	if okID {
 		if len(*r.ID) == 0 {
-			return errors.New("bad request")
+			return jerrors.New("bad request")
 		}
 		switch []byte(*r.ID)[0] {
 		case 't', 'f', '{', '[':
-			return errors.New("bad request")
+			return jerrors.New("bad request")
 		}
 	}
 
@@ -187,7 +189,7 @@ func (c *serverCodec) ReadHeader(m *codec.Message) error {
 	c.seq++
 	c.pending[c.seq] = c.req.ID
 	c.req.ID = nil
-	m.Id = c.seq
+	m.ID = c.seq
 	c.mutex.Unlock()
 
 	return nil
@@ -224,7 +226,7 @@ func (c *serverCodec) ReadBody(x interface{}) error {
 	// 在这里把请求参数json 字符串转换成了相应的struct
 	params = []byte(*c.req.Params)
 	// if c.req.Method == BatchMethod {
-	// 	return fmt.Errorf("batch request is not allowed")
+	// 	return jerrors.Errorf("batch request is not allowed")
 	// 	/*
 	// 		arg := x.(*BatchArg)
 	// 		arg.srv = c.srv
@@ -267,12 +269,12 @@ func (c *serverCodec) Write(m *codec.Message, x interface{}) error {
 	)
 
 	c.mutex.Lock()
-	b, ok := c.pending[m.Id]
+	b, ok := c.pending[m.ID]
 	if !ok {
 		c.mutex.Unlock()
-		return errors.New("invalid sequence number in response")
+		return jerrors.New("invalid sequence number in response")
 	}
-	delete(c.pending, m.Id)
+	delete(c.pending, m.ID)
 	c.mutex.Unlock()
 
 	if b == nil {
@@ -327,7 +329,7 @@ tcp stream example:
 0x00c0:  0a43 6f6e 7465 6e74 2d54 7970 653a 2061  .Content-Type:.a
 0x00d0:  7070 6c69 6361 7469 6f6e 2f6a 736f 6e0d  pplication/json.
 0x00e0:  0a54 696d 656f 7574 3a20 3235 3030 3030  .Timeout:.250000
-0x00f0:  3030 300d 0a58 2d46 726f 6d2d 4964 3a20  000..X-From-Id:.
+0x00f0:  3030 300d 0a58 2d46 726f 6d2d 4964 3a20  000..X-From-ID:.
 0x0100:  7363 7269 7074 0d0a 582d 5573 6572 2d49  script..X-User-I
 0x0110:  643a 206a 6f68 6e0d 0a0d 0a7b 226a 736f  d:.john....{"jso
 0x0120:  6e72 7063 223a 2232 2e30 222c 226d 6574  nrpc":"2.0","met

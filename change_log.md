@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # dubbogo #
 a golang micro-service framework compatible with alibaba dubbo. just using jsonrpc 2.0 protocol over http now.
 
@@ -10,6 +11,29 @@ a golang micro-service framework compatible with alibaba dubbo. just using jsonr
 
 ## develop list ##
 ---
+
+### 2018-05-17
+---
+- 1 把github.com/AlexStocks/gohessian最新的hessian2解析代码合并到dubbogo/codec/hessian下面；
+- 2 改进tcp transport socket字节流读取机制；
+- 3 registry/config.go:ServiceConfig::ServiceEqual 严格过滤条件。
+
+### 2018-05-07
+---
+- 1 fmt.Errorf -> juju/errors.Errorf
+- 2 delete ListService
+- 3 Registry.GetService -> Registry.GetServices
+- 4 use ServiceConfigIf in selector.Select()
+- 5 把dubbog-examples client下面一些默认配置放到client package 下面
+- 6 把hessian codec和rpc client对接起来
+
+### 2016-10-26 ###
+---
+- 1 添加 github.com/AlexStocks/dubbogo-examples/calculator/java-server 作为client_test.go的mock服务端
+
+### 2016-10-23 ###
+---
+- 1 把所有有关ID的field的type由uint64改为int64，因为java没有uint64类型 
 
 ### 2018-04-19 ###
 ---

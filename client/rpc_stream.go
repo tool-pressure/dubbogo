@@ -12,25 +12,31 @@ package client
 
 import (
 	"context"
-	"errors"
 	"io"
+	"strings"
 	"sync"
-	// "golang.org/x/net/context"
+	"time"
 )
 
 import (
 	log "github.com/AlexStocks/log4go"
+	jerrors "github.com/juju/errors"
+)
+
+import (
+	"github.com/AlexStocks/dubbogo/registry"
 )
 
 // Implements the streamer interface
 type rpcStream struct {
 	sync.RWMutex
-	seq     uint64
-	closed  chan bool
-	err     error
-	request Request
-	codec   clientCodec
-	context context.Context
+	seq        int64
+	closed     chan struct{}
+	err        error
+	serviceURL registry.ServiceURL
+	request    Request
+	codec      clientCodec
+	context    context.Context
 }
 
 func (r *rpcStream) isClosed() bool {
@@ -51,29 +57,33 @@ func (r *rpcStream) Request() Request {
 }
 
 // 调用rpcStream.clientCodec.WriteRequest函数
-func (r *rpcStream) Send(msg interface{}) error {
+func (r *rpcStream) Send(args interface{}, timeout time.Duration) error {
 	r.Lock()
-	defer r.Unlock()
 
 	if r.isClosed() {
 		r.err = errShutdown
+		r.Unlock()
 		return errShutdown
 	}
 
 	seq := r.seq
 	r.seq++
+	r.Unlock()
 
 	req := request{
-		Service:       r.request.Service(),
+		Version:       r.request.Version(),
+		ServicePath:   strings.TrimPrefix(r.serviceURL.Path, "/"),
+		Service:       r.request.ServiceConfig().(*registry.ServiceConfig).Service,
 		Seq:           seq,
 		ServiceMethod: r.request.Method(),
+		Timeout:       timeout,
 	}
 
-	// fmt.Printf("rpc stream request:%#v, codec:%#v\n", req, r.codec)
-	if err := r.codec.WriteRequest(&req, msg); err != nil {
+	if err := r.codec.WriteRequest(&req, args); err != nil {
 		r.err = err
-		return err
+		return jerrors.Trace(err)
 	}
+
 	return nil
 }
 
@@ -92,9 +102,9 @@ func (r *rpcStream) Recv(msg interface{}) error {
 			r.err = io.ErrUnexpectedEOF
 			return io.ErrUnexpectedEOF
 		}
-		log.Warn("msg{%v}, err{%#v}", msg, err)
+		log.Warn("msg{%v}, err{%s}", msg, jerrors.ErrorStack(err))
 		r.err = err
-		return err
+		return jerrors.Trace(err)
 	}
 
 	switch {
@@ -108,15 +118,15 @@ func (r *rpcStream) Recv(msg interface{}) error {
 			r.err = io.EOF
 		}
 		if err := r.codec.ReadResponseBody(nil); err != nil {
-			r.err = errors.New("reading error payload: " + err.Error())
+			r.err = jerrors.Trace(err)
 		}
+
 	default:
 		if err := r.codec.ReadResponseBody(msg); err != nil {
-			r.err = errors.New("reading body " + err.Error())
+			r.err = jerrors.Trace(err)
 		}
 	}
 
-	log.Debug("rpcStream.Recv(msg{%v}) = r.err{%T %v}", msg, r.err, r.err)
 	return r.err
 }
 
@@ -127,12 +137,10 @@ func (r *rpcStream) Error() error {
 }
 
 func (r *rpcStream) Close() error {
-	// log.Debug("close rpcStream{%#v}", r)
 	select {
 	case <-r.closed:
 		return nil
 	default:
-		// log.Debug("close rpcStream.codec")
 		close(r.closed)
 		return r.codec.Close()
 	}

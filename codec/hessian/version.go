@@ -8,11 +8,10 @@
 # FILE    : version.go
 ******************************************************/
 
-package version
+package hessian
 
 const (
 	// dubbogo version
-	Version = "0.2.0"
-	Name    = "dubbogo"
-	DATE    = "2017/10/17"
+	Version string = "2.0.0"
+	DATE           = "2018/04/27"
 )

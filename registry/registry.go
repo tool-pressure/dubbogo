@@ -2,16 +2,11 @@ package registry
 
 import (
 	"errors"
-	"fmt"
 )
 
 // Result is returned by a call to Next on
 // the watcher. Actions can be create, update, delete
-type Result ServiceURLEvent
-
-func (r Result) String() string {
-	return fmt.Sprintf("Result{Action{%s}, Service{%#v}}", r.Action.String(), r.Service)
-}
+type Result = ServiceURLEvent
 
 // Watcher is an interface that returns updates
 // about services within the registry.
@@ -22,14 +17,15 @@ type Watcher interface {
 	Stop()
 }
 
+type NewRegistry func(...Option) Registry
+
 // The registry provides an interface for service discovery
 // and an abstraction over varying implementations
-// {consul, etcd, zookeeper, ...}
+// {etcd, zookeeper, ...}
 type Registry interface {
 	// Register(conf ServiceConfig) error
 	Register(conf interface{}) error
-	GetService(string) ([]*ServiceURL, error)
-	ListServices() ([]*ServiceURL, error)
+	GetServices(ServiceConfigIf) ([]*ServiceURL, error)
 	Watch() (Watcher, error)
 	Close()
 	String() string

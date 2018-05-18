@@ -14,13 +14,12 @@ import (
 	"context"
 	"log"
 	"sync"
-	// "golang.org/x/net/context"
 )
 
 // Implements the Streamer interface
 type rpcStream struct {
 	sync.RWMutex
-	seq     uint64
+	seq     int64
 	closed  bool
 	err     error
 	request Request

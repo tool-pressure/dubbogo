@@ -53,6 +53,19 @@ func newError(message string) *Error {
 	}
 }
 
+// Error returns JSON representation of Error.
+func (e *Error) Error() string {
+	buf, err := json.Marshal(e)
+	if err != nil {
+		msg, err := json.Marshal(err.Error())
+		if err != nil {
+			msg = []byte(`"` + errServerError.Message + `"`)
+		}
+		return fmt.Sprintf(`{"code":%d,"message":%s}`, errServerError.Code, string(msg))
+	}
+	return string(buf)
+}
+
 // ServerError convert errors returned by Client.Call() into Error.
 // User should check for rpc.ErrShutdown and io.ErrUnexpectedEOF before
 // calling ServerError.
@@ -86,17 +99,4 @@ func ServerError(rpcerr error) *Error {
 		e.Data = nil
 	}
 	return e
-}
-
-// Error returns JSON representation of Error.
-func (e *Error) Error() string {
-	buf, err := json.Marshal(e)
-	if err != nil {
-		msg, err := json.Marshal(err.Error())
-		if err != nil {
-			msg = []byte(`"` + errServerError.Message + `"`)
-		}
-		return fmt.Sprintf(`{"code":%d,"message":%s}`, errServerError.Code, string(msg))
-	}
-	return string(buf)
 }

@@ -12,16 +12,15 @@ package server
 
 import (
 	"context"
-	"fmt"
 	"runtime/debug"
 	"strconv"
 	"sync"
 	"time"
-	// "golang.org/x/net/context"
 )
 
 import (
 	log "github.com/AlexStocks/log4go"
+	jerrors "github.com/juju/errors"
 )
 
 import (
@@ -61,11 +60,11 @@ func newServer(opts ...Option) Server {
 	}
 }
 
-func (this *server) handlePkg(servo interface{}, sock transport.Socket) {
+func (s *server) handlePkg(servo interface{}, sock transport.Socket) {
 	var (
 		ok          bool
 		rpc         *rpcServer
-		msg         transport.Message
+		pkg         transport.Package
 		err         error
 		timeout     uint64
 		contentType string
@@ -92,20 +91,20 @@ func (this *server) handlePkg(servo interface{}, sock transport.Socket) {
 	}()
 
 	for {
-		msg.Reset()
+		pkg.Reset()
 		// 读取请求包
-		if err = sock.Recv(&msg); err != nil {
+		if err = sock.Recv(&pkg); err != nil {
 			return
 		}
 
 		// 下面的所有逻辑都是处理请求包，并回复response
-		// we use this Content-Type header to identify the codec needed
-		contentType = msg.Header["Content-Type"]
+		// we use s Content-Type header to identify the codec needed
+		contentType = pkg.Header["Content-Type"]
 
 		// codec of jsonrpc & other type etc
-		codecFunc, err = this.newCodec(contentType)
+		codecFunc, err = s.newCodec(contentType)
 		if err != nil {
-			sock.Send(&transport.Message{
+			sock.Send(&transport.Package{
 				Header: map[string]string{
 					"Content-Type": "text/plain",
 				},
@@ -116,11 +115,11 @@ func (this *server) handlePkg(servo interface{}, sock transport.Socket) {
 
 		// !!!! 雷同于consumer/rpc_client中那个关键的一句，把github.com/AlexStocks/dubbogo/transport & github.com/AlexStocks/dubbogo/codec结合了起来
 		// newRpcCodec(*transport.Message, transport.Socket, codec.NewCodec)
-		codec = newRpcCodec(&msg, sock, codecFunc)
+		codec = newRpcCodec(&pkg, sock, codecFunc)
 
 		// strip our headers
 		header = make(map[string]string)
-		for key, value = range msg.Header {
+		for key, value = range pkg.Header {
 			header[key] = value
 		}
 		delete(header, "Content-Type")
@@ -128,9 +127,9 @@ func (this *server) handlePkg(servo interface{}, sock transport.Socket) {
 
 		// ctx = metadata.NewContext(context.Background(), header)
 		ctx = context.WithValue(context.Background(), common.DUBBOGO_CTX_KEY, header)
-		// we use this Timeout header to set a server deadline
-		if len(msg.Header["Timeout"]) > 0 {
-			if timeout, err = strconv.ParseUint(msg.Header["Timeout"], 10, 64); err == nil {
+		// we use s Timeout header to set a server deadline
+		if len(pkg.Header["Timeout"]) > 0 {
+			if timeout, err = strconv.ParseUint(pkg.Header["Timeout"], 10, 64); err == nil {
 				ctx, _ = context.WithTimeout(ctx, time.Duration(timeout))
 			}
 		}
@@ -142,36 +141,36 @@ func (this *server) handlePkg(servo interface{}, sock transport.Socket) {
 	}
 }
 
-func (this *server) newCodec(contentType string) (codec.NewCodec, error) {
+func (s *server) newCodec(contentType string) (codec.NewCodec, error) {
 	var (
 		ok bool
 		cf codec.NewCodec
 	)
-	if cf, ok = this.opts.Codecs[contentType]; ok {
+	if cf, ok = s.opts.Codecs[contentType]; ok {
 		return cf, nil
 	}
 	if cf, ok = defaultCodecs[contentType]; ok {
 		return cf, nil
 	}
-	return nil, fmt.Errorf("Unsupported Content-Type: %s", contentType)
+	return nil, jerrors.Errorf("Unsupported Content-Type: %s", contentType)
 }
 
-func (this *server) Options() Options {
+func (s *server) Options() Options {
 	var (
 		opts Options
 	)
 
-	this.RLock()
-	opts = this.opts
-	this.RUnlock()
+	s.RLock()
+	opts = s.opts
+	s.RUnlock()
 
 	return opts
 }
 
 /*
 type ProviderServiceConfig struct {
-	Protocol string // from ServiceConfig, get field{Path} from ServerConfig by this field
-	Service string  // from handler, get field{Protocol, Group, Version} from ServiceConfig by this field
+	Protocol string // from ServiceConfig, get field{Path} from ServerConfig by s field
+	Service string  // from handler, get field{Protocol, Group, Version} from ServiceConfig by s field
 	Group   string
 	Version string
 	Methods string
@@ -192,7 +191,7 @@ type ServerConfig struct {
 }
 */
 
-func (this *server) Handle(h Handler) error {
+func (s *server) Handle(h Handler) error {
 	var (
 		i           int
 		j           int
@@ -203,7 +202,7 @@ func (this *server) Handle(h Handler) error {
 		config      Options
 		serviceConf registry.ProviderServiceConfig
 	)
-	config = this.Options()
+	config = s.Options()
 
 	serviceConf.Service = h.Service()
 	serviceConf.Version = h.Version()
@@ -220,9 +219,9 @@ func (this *server) Handle(h Handler) error {
 			// serviceConf.Version = config.ServiceConfList[i].Version
 			for j = 0; j < serverNum; j++ {
 				if config.ServerConfList[j].Protocol == serviceConf.Protocol {
-					this.Lock()
-					serviceConf.Methods, err = this.rpc[j].register(h)
-					this.Unlock()
+					s.Lock()
+					serviceConf.Methods, err = s.rpc[j].register(h)
+					s.Unlock()
 					if err != nil {
 						return err
 					}
@@ -239,17 +238,17 @@ func (this *server) Handle(h Handler) error {
 	}
 
 	if flag == 0 {
-		return fmt.Errorf("fail to register Handler{service:%s, version:%s}", serviceConf.Service, serviceConf.Version)
+		return jerrors.Errorf("fail to register Handler{service:%s, version:%s}", serviceConf.Service, serviceConf.Version)
 	}
 
-	this.Lock()
-	this.handlers[h.Service()] = h
-	this.Unlock()
+	s.Lock()
+	s.handlers[h.Service()] = h
+	s.Unlock()
 
 	return nil
 }
 
-func (this *server) Start() error {
+func (s *server) Start() error {
 	var (
 		i         int
 		serverNum int
@@ -258,7 +257,7 @@ func (this *server) Start() error {
 		rpc       *rpcServer
 		listener  transport.Listener
 	)
-	config = this.Options()
+	config = s.Options()
 
 	serverNum = len(config.ServerConfList)
 	for i = 0; i < serverNum; i++ {
@@ -268,43 +267,43 @@ func (this *server) Start() error {
 		}
 		log.Info("Listening on %s", listener.Addr())
 
-		this.Lock()
-		rpc = this.rpc[i]
+		s.Lock()
+		rpc = s.rpc[i]
 		rpc.listener = listener
-		this.Unlock()
+		s.Unlock()
 
-		this.wg.Add(1)
+		s.wg.Add(1)
 		go func(servo *rpcServer) {
-			listener.Accept(func(s transport.Socket) { this.handlePkg(rpc, s) })
-			this.wg.Done()
+			listener.Accept(func(sock transport.Socket) { s.handlePkg(rpc, sock) })
+			s.wg.Done()
 		}(rpc)
 
-		this.wg.Add(1)
+		s.wg.Add(1)
 		go func(servo *rpcServer) { // server done goroutine
 			var err error
-			<-this.done                  // step1: block to wait for done channel(wait server.Stop step2)
+			<-s.done                     // step1: block to wait for done channel(wait server.Stop step2)
 			err = servo.listener.Close() // step2: and then close listener
 			if err != nil {
 				log.Warn("listener{addr:%s}.Close() = error{%#v}", servo.listener.Addr(), err)
 			}
-			this.wg.Done()
+			s.wg.Done()
 		}(rpc)
 	}
 
 	return nil
 }
 
-func (this *server) Stop() {
-	this.once.Do(func() {
-		close(this.done)
-		this.wg.Wait()
-		if this.opts.Registry != nil {
-			this.opts.Registry.Close()
-			this.opts.Registry = nil
+func (s *server) Stop() {
+	s.once.Do(func() {
+		close(s.done)
+		s.wg.Wait()
+		if s.opts.Registry != nil {
+			s.opts.Registry.Close()
+			s.opts.Registry = nil
 		}
 	})
 }
 
-func (this *server) String() string {
-	return "dubbogo rpc server"
+func (s *server) String() string {
+	return "dubbogo-server"
 }

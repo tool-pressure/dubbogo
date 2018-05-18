@@ -1,8 +1,12 @@
 package common
 
 import (
-	"fmt"
 	"net"
+	"time"
+)
+
+import (
+	jerrors "github.com/juju/errors"
 )
 
 var (
@@ -26,7 +30,7 @@ func GetLocalIP(addr string) (string, error) {
 
 	addrs, err := net.InterfaceAddrs()
 	if err != nil {
-		return "", fmt.Errorf("Failed to get interface addresses! Err: %v", err)
+		return "", jerrors.Errorf("Failed to get interface addresses! Err: %v", err)
 	}
 
 	var ipAddr []byte
@@ -59,7 +63,7 @@ func GetLocalIP(addr string) (string, error) {
 	}
 
 	if ipAddr == nil {
-		return "", fmt.Errorf("No private IP address found, and explicit IP not provided")
+		return "", jerrors.Errorf("No private IP address found, and explicit IP not provided")
 	}
 
 	return net.IP(ipAddr).String(), nil
@@ -73,4 +77,14 @@ func isPrivateIP(ipAddr string) bool {
 		}
 	}
 	return false
+}
+
+// refer to samuel/go-zookeeper
+func SetNetConnTimeout(conn net.Conn, timeout time.Duration) {
+	t := time.Time{}
+	if timeout > time.Duration(0) {
+		t = time.Now().Add(timeout)
+	}
+
+	conn.SetReadDeadline(t)
 }

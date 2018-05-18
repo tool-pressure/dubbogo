@@ -11,7 +11,6 @@
 package zookeeper
 
 import (
-	"errors"
 	"path"
 	"sync"
 	"time"
@@ -19,6 +18,7 @@ import (
 
 import (
 	log "github.com/AlexStocks/log4go"
+	jerrors "github.com/juju/errors"
 	"github.com/samuel/go-zookeeper/zk"
 )
 
@@ -47,23 +47,23 @@ type event struct {
 }
 
 func newZookeeperWatcher(client *zookeeperClient) (registry.Watcher, error) {
-	this := &zookeeperWatcher{
+	w := &zookeeperWatcher{
 		client: client,
 		events: make(chan event, Wactch_Event_Channel_Size),
 	}
 
-	return this, nil
+	return w, nil
 }
 
 // 这个函数退出，意味着要么收到了stop信号，要么watch的node不存在了
-// 除了下面的watchDir会调用这个函数外，func (this *zookeeperRegistry) registerZookeeperNode(root string, data []byte)也
+// 除了下面的watchDir会调用这个函数外，func (w *zookeeperRegistry) registerZookeeperNode(root string, data []byte)也
 // 调用了这个函数
-func (this *zookeeperWatcher) watchServiceNode(zkPath string) bool {
-	this.wait.Add(1)
-	defer this.wait.Done()
+func (w *zookeeperWatcher) watchServiceNode(zkPath string) bool {
+	w.wait.Add(1)
+	defer w.wait.Done()
 	var zkEvent zk.Event
 	for {
-		keyEventCh, err := this.client.existW(zkPath)
+		keyEventCh, err := w.client.existW(zkPath)
 		if err != nil {
 			log.Error("existW{key:%s} = error{%v}", zkPath, err)
 			return false
@@ -85,7 +85,7 @@ func (this *zookeeperWatcher) watchServiceNode(zkPath string) bool {
 				//The Node was deleted - stop watching
 				return true
 			}
-		case <-this.client.done():
+		case <-w.client.done():
 			// There is no way to stop existW so just quit
 			return false
 		}
@@ -94,14 +94,15 @@ func (this *zookeeperWatcher) watchServiceNode(zkPath string) bool {
 	return false
 }
 
-func (this *zookeeperWatcher) handleZkNodeEvent(zkPath string, children []string, conf registry.ServiceConfig) {
+func (w *zookeeperWatcher) handleZkNodeEvent(zkPath string, children []string, conf registry.ServiceConfig) {
 	var (
 		err         error
 		newChildren []string
 	)
-	newChildren, err = this.client.getChildren(zkPath)
+	newChildren, err = w.client.getChildren(zkPath)
 	if err != nil {
-		log.Error("path{%s} child nodes changed, zk.Children(path{%s} = error{%v}", zkPath, zkPath, err)
+		log.Error("path{%s} child nodes changed, zk.Children(path{%s} = error{%v}",
+			zkPath, zkPath, jerrors.ErrorStack(err))
 		return
 	}
 
@@ -119,23 +120,23 @@ func (this *zookeeperWatcher) handleZkNodeEvent(zkPath string, children []string
 		log.Info("add zkNode{%s}", newNode)
 		serviceURL, err = registry.NewServiceURL(n)
 		if err != nil {
-			log.Error("NewServiceURL(%s) = error{%v}", n, err)
+			log.Error("NewServiceURL(%s) = error{%v}", n, jerrors.ErrorStack(err))
 			continue
 		}
 		if !conf.ServiceEqual(serviceURL) {
-			log.Warn("serviceURL{%#v} is not compatible with ServiceConfig{%#v}", serviceURL, conf)
+			log.Warn("serviceURL{%s} is not compatible with ServiceConfig{%#v}", serviceURL, conf)
 			continue
 		}
-		log.Info("add serviceURL{%#v}", serviceURL)
-		this.events <- event{&registry.Result{registry.ServiceURLAdd, serviceURL}, nil}
-		// watch this service node
+		log.Info("add serviceURL{%s}", serviceURL)
+		w.events <- event{&registry.Result{registry.ServiceURLAdd, serviceURL}, nil}
+		// watch w service node
 		go func(node string, serviceURL *registry.ServiceURL) {
 			log.Info("delete zkNode{%s}", node)
 			// watch goroutine退出，原因可能是service node不存在或者是与registry连接断开了
 			// 为了selector服务的稳定，仅在收到delete event的情况下向selector发送delete service event
-			if this.watchServiceNode(node) {
-				log.Info("delete serviceURL{%#v}", serviceURL)
-				this.events <- event{&registry.Result{registry.ServiceURLDel, serviceURL}, nil}
+			if w.watchServiceNode(node) {
+				log.Info("delete serviceURL{%s}", serviceURL)
+				w.events <- event{&registry.Result{registry.ServiceURLDel, serviceURL}, nil}
 			}
 			log.Warn("watchSelf(zk path{%s}) goroutine exit now", zkPath)
 		}(newNode, serviceURL)
@@ -154,23 +155,23 @@ func (this *zookeeperWatcher) handleZkNodeEvent(zkPath string, children []string
 		log.Warn("delete zkPath{%s}", oldNode)
 		serviceURL, err = registry.NewServiceURL(n)
 		if !conf.ServiceEqual(serviceURL) {
-			log.Warn("serviceURL{%#v} has been deleted is not compatible with ServiceConfig{%#v}", serviceURL, conf)
+			log.Warn("serviceURL{%s} has been deleted is not compatible with ServiceConfig{%#v}", serviceURL, conf)
 			continue
 		}
-		log.Warn("delete serviceURL{%#v}", serviceURL)
+		log.Warn("delete serviceURL{%s}", serviceURL)
 		if err != nil {
-			log.Error("NewServiceURL(i{%s}) = error{%v}", n, err)
+			log.Error("NewServiceURL(i{%s}) = error{%v}", n, jerrors.ErrorStack(err))
 			continue
 		}
-		this.events <- event{&registry.Result{registry.ServiceURLDel, serviceURL}, nil}
+		w.events <- event{&registry.Result{registry.ServiceURLDel, serviceURL}, nil}
 	}
 }
 
 // zkPath 是/dubbo/com.xxx.service/[providers or consumers or configurators]
 // 关注zk path下面node的添加或者删除
-func (this *zookeeperWatcher) watchDir(zkPath string, conf registry.ServiceConfig) {
-	this.wait.Add(1)
-	defer this.wait.Done()
+func (w *zookeeperWatcher) watchDir(zkPath string, conf registry.ServiceConfig) {
+	w.wait.Add(1)
+	defer w.wait.Done()
 
 	var (
 		failTimes int
@@ -181,7 +182,7 @@ func (this *zookeeperWatcher) watchDir(zkPath string, conf registry.ServiceConfi
 	defer close(event)
 	for {
 		// get current children for a zkPath
-		children, childEventCh, err := this.client.getChildrenW(zkPath)
+		children, childEventCh, err := w.client.getChildrenW(zkPath)
 		if err != nil {
 			failTimes++
 			if MAX_TIMES <= failTimes {
@@ -197,20 +198,20 @@ func (this *zookeeperWatcher) watchDir(zkPath string, conf registry.ServiceConfi
 					break CLEAR
 				}
 			}
-			this.client.registerEvent(zkPath, &event)
+			w.client.registerEvent(zkPath, &event)
 			select {
 			// 防止疯狂重试连接zookeeper
 			case <-time.After(common.TimeSecondDuration(failTimes * registry.REGISTRY_CONN_DELAY)):
-				this.client.unregisterEvent(zkPath, &event)
+				w.client.unregisterEvent(zkPath, &event)
 				continue
-			case <-this.client.done():
-				this.client.unregisterEvent(zkPath, &event)
+			case <-w.client.done():
+				w.client.unregisterEvent(zkPath, &event)
 				log.Warn("client.done(), watch(path{%s}, ServiceConfig{%#v}) goroutine exit now...", zkPath, conf)
 				return
 			case <-event:
 				log.Info("get zk.EventNodeDataChange notify event")
-				this.client.unregisterEvent(zkPath, &event)
-				this.handleZkNodeEvent(zkPath, nil, conf)
+				w.client.unregisterEvent(zkPath, &event)
+				w.handleZkNodeEvent(zkPath, nil, conf)
 				continue
 			}
 		}
@@ -223,8 +224,8 @@ func (this *zookeeperWatcher) watchDir(zkPath string, conf registry.ServiceConfi
 			if zkEvent.Type != zk.EventNodeChildrenChanged {
 				continue
 			}
-			this.handleZkNodeEvent(zkEvent.Path, children, conf)
-		case <-this.client.done():
+			w.handleZkNodeEvent(zkEvent.Path, children, conf)
+		case <-w.client.done():
 			// There is no way to stop GetW/ChildrenW so just quit
 			log.Warn("client.done(), watch(path{%s}, ServiceConfig{%#v}) goroutine exit now...", zkPath, conf)
 			return
@@ -236,7 +237,7 @@ func (this *zookeeperWatcher) watchDir(zkPath string, conf registry.ServiceConfi
 // client.go:Watch -> watchService -> watchDir -> watchServiceNode
 //                            |
 //                            --------> watchServiceNode
-func (this *zookeeperWatcher) watchService(zkPath string, conf registry.ServiceConfig) {
+func (w *zookeeperWatcher) watchService(zkPath string, conf registry.ServiceConfig) {
 	var (
 		err        error
 		dubboPath  string
@@ -245,13 +246,13 @@ func (this *zookeeperWatcher) watchService(zkPath string, conf registry.ServiceC
 	)
 
 	// 先把现有的服务节点通过watch发送给selector
-	children, err = this.client.getChildren(zkPath)
+	children, err = w.client.getChildren(zkPath)
 	if err != nil {
 		children = nil
 		log.Error("fail to get children of zk path{%s}", zkPath)
 		// 不要发送不必要的error给selector，以防止selector/cache/cache.go:(cacheSelector)watch
 		// 调用(zookeeperWatcher)Next获取error后，不断退出
-		// this.events <- event{nil, err}
+		// w.events <- event{nil, err}
 	}
 
 	for _, c := range children {
@@ -264,19 +265,19 @@ func (this *zookeeperWatcher) watchService(zkPath string, conf registry.ServiceC
 		// 因为service.ServiceConfig.service指代的是"/dubbo/com.xxx.xxx"中的"com.xxx.xxx"
 		// if serviceURL.Protocol != conf.Protocol || serviceURL.Group != conf.Group || serviceURL.Version != conf.Version {
 		if !conf.ServiceEqual(serviceURL) {
-			log.Warn("serviceURL{%#v} is not compatible with ServiceConfig{%#v}", serviceURL, conf)
+			log.Warn("serviceURL{%s} is not compatible with ServiceConfig{%#v}", serviceURL, conf)
 			continue
 		}
-		log.Debug("add serviceUrl{%#v}", serviceURL)
-		this.events <- event{&registry.Result{registry.ServiceURLAdd, serviceURL}, nil}
+		log.Debug("add serviceUrl{%s}", serviceURL)
+		w.events <- event{&registry.Result{registry.ServiceURLAdd, serviceURL}, nil}
 
-		// watch this service node
+		// watch w service node
 		dubboPath = path.Join(zkPath, c)
 		log.Info("watch dubbo service key{%s}", dubboPath)
 		go func(zkPath string, serviceURL *registry.ServiceURL) {
-			if this.watchServiceNode(dubboPath) {
-				log.Debug("delete serviceUrl{%#v}", serviceURL)
-				this.events <- event{&registry.Result{registry.ServiceURLDel, serviceURL}, nil}
+			if w.watchServiceNode(dubboPath) {
+				log.Debug("delete serviceUrl{%s}", serviceURL)
+				w.events <- event{&registry.Result{registry.ServiceURLDel, serviceURL}, nil}
 			}
 			log.Warn("watchSelf(zk path{%s}) goroutine exit now", zkPath)
 		}(dubboPath, serviceURL)
@@ -284,26 +285,26 @@ func (this *zookeeperWatcher) watchService(zkPath string, conf registry.ServiceC
 
 	log.Info("watch dubbo path{%s}", zkPath)
 	go func(zkPath string, conf registry.ServiceConfig) {
-		this.watchDir(zkPath, conf)
+		w.watchDir(zkPath, conf)
 		log.Warn("watchDir(zkPath{%s}) goroutine exit now", zkPath)
 	}(zkPath, conf)
 }
 
-func (this *zookeeperWatcher) Next() (*registry.Result, error) {
+func (w *zookeeperWatcher) Next() (*registry.Result, error) {
 	select {
-	case <-this.client.done():
-		return nil, errors.New("watcher stopped")
-	case r := <-this.events:
+	case <-w.client.done():
+		return nil, jerrors.New("watcher stopped")
+	case r := <-w.events:
 		return r.res, r.err
 	}
 }
 
-func (this *zookeeperWatcher) Valid() bool {
-	return this.client.zkConnValid()
+func (w *zookeeperWatcher) Valid() bool {
+	return w.client.zkConnValid()
 }
 
-func (this *zookeeperWatcher) Stop() {
-	this.once.Do(func() {
-		this.client.Close()
+func (w *zookeeperWatcher) Stop() {
+	w.once.Do(func() {
+		w.client.Close()
 	})
 }

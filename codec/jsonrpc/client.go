@@ -9,16 +9,16 @@ import (
 
 import (
 	log "github.com/AlexStocks/log4go"
-	// "github.com/gorilla/rpc/v2/json2"
+	jerrors "github.com/juju/errors"
 )
 
 import (
-	"fmt"
 	"github.com/AlexStocks/dubbogo/codec"
 )
 
 const (
 	MAX_JSONRPC_ID = 0x7FFFFFFF
+	VERSION        = "2.0"
 )
 
 type clientCodec struct {
@@ -31,34 +31,21 @@ type clientCodec struct {
 	resp clientResponse
 
 	sync.Mutex
-	pending map[uint64]string
+	pending map[int64]string
 }
-
-// type clientRequest struct {
-// 	Method string         `json:"method"`
-// 	Params [1]interface{} `json:"params"`
-// 	ID     uint64         `json:"id"`
-// }
 
 type clientRequest struct {
 	Version string      `json:"jsonrpc"`
 	Method  string      `json:"method"`
 	Params  interface{} `json:"params"`
-	ID      uint64      `json:"id"`
+	ID      int64       `json:"id"`
 }
-
-// type clientResponse struct {
-// 	ID     uint64           `json:"id"`
-// 	Result *json.RawMessage `json:"result"`
-// 	Error  interface{}      `json:"error"`
-// }
 
 type clientResponse struct {
 	Version string           `json:"jsonrpc"`
-	ID      uint64           `json:"id"`
+	ID      int64            `json:"id"`
 	Result  *json.RawMessage `json:"result,omitempty"`
-	// Error   *json.RawMessage `json:"error"`
-	Error *Error `json:"error,omitempty"`
+	Error   *Error           `json:"error,omitempty"`
 }
 
 func (r *clientResponse) reset() {
@@ -73,7 +60,7 @@ func newClientCodec(conn io.ReadWriteCloser) *clientCodec {
 		dec:     json.NewDecoder(conn),
 		enc:     json.NewEncoder(conn),
 		c:       conn,
-		pending: make(map[uint64]string),
+		pending: make(map[int64]string),
 	}
 }
 
@@ -115,24 +102,18 @@ func (c *clientCodec) Write(m *codec.Message, param interface{}) error {
 		}
 	}
 
-	c.req.Version = "2.0"
+	c.req.Version = VERSION
 	c.req.Method = m.Method
 	// c.req.Params = b
 	c.req.Params = param
-	c.req.ID = m.Id & MAX_JSONRPC_ID
+	c.req.ID = m.ID & MAX_JSONRPC_ID
 	c.Lock()
-	// c.pending[m.Id] = m.Method // 此处如果用m.Id会导致error: can not find method of response id 280698512
+	// c.pending[m.ID] = m.Method // 此处如果用m.ID会导致error: can not find method of response id 280698512
 	c.pending[c.req.ID] = m.Method
 	c.Unlock()
 
 	return c.enc.Encode(&c.req)
 }
-
-// func (r *clientResponse) reset() {
-// 	r.ID = 0
-// 	r.Result = nil
-// 	r.Error = nil
-// }
 
 func (c *clientCodec) ReadHeader(m *codec.Message) error {
 	c.resp.reset()
@@ -153,7 +134,7 @@ func (c *clientCodec) ReadHeader(m *codec.Message) error {
 	m.Method, ok = c.pending[c.resp.ID]
 	if !ok {
 		c.Unlock()
-		err := fmt.Errorf("can not find method of response id %v, response error:%v", c.resp.ID, c.resp.Error)
+		err := jerrors.Errorf("can not find method of response id %v, response error:%v", c.resp.ID, c.resp.Error)
 		log.Debug("clientCodec.ReadHeader(@m{%v}) = error{%v}", m, err)
 		return err
 	}
@@ -161,11 +142,11 @@ func (c *clientCodec) ReadHeader(m *codec.Message) error {
 	c.Unlock()
 
 	m.Error = ""
-	m.Id = c.resp.ID
+	m.ID = c.resp.ID
 	if c.resp.Error != nil {
 		// x, ok := c.resp.Error.(string)
 		// if !ok {
-		// 	return fmt.Errorf("invalid error %v", c.resp.Error)
+		// 	return jerrors.Errorf("invalid error %v", c.resp.Error)
 		// }
 		// if x == "" {
 		// 	x = "unspecified error"

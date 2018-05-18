@@ -13,7 +13,6 @@ package client
 import (
 	"context"
 	"time"
-	// "golang.org/x/net/context"
 )
 
 import (
@@ -23,12 +22,70 @@ import (
 	"github.com/AlexStocks/dubbogo/transport"
 )
 
+//////////////////////////////////////////////
+// Request Options
+//////////////////////////////////////////////
+
+func StreamingRequest() RequestOption {
+	return func(o *RequestOptions) {
+		o.Stream = true
+	}
+}
+
+type RequestOptions struct {
+	Stream  bool
+	Context context.Context
+}
+
+//////////////////////////////////////////////
+// Call Options
+//////////////////////////////////////////////
+
+type CallOptions struct {
+	// Transport Dial Timeout
+	DialTimeout time.Duration
+	// Number of Call attempts
+	Retries int
+	// Request/Response timeout
+	RequestTimeout time.Duration
+	// cache selector address
+	Next selector.Next
+}
+
+// WithDialTimeout is a CallOption which overrides that which
+// set in Options.CallOptions
+func WithDialTimeout(d time.Duration) CallOption {
+	return func(o *CallOptions) {
+		o.DialTimeout = d
+	}
+}
+
+// WithRetries is a CallOption which overrides that which
+// set in Options.CallOptions
+func WithRetries(i int) CallOption {
+	return func(o *CallOptions) {
+		o.Retries = i
+	}
+}
+
+// WithRequestTimeout is a CallOption which overrides that which
+// set in Options.CallOptions
+func WithRequestTimeout(d time.Duration) CallOption {
+	return func(o *CallOptions) {
+		o.RequestTimeout = d
+	}
+}
+
+//////////////////////////////////////////////
+// Options
+//////////////////////////////////////////////
+
 type Options struct {
 	// Used to select codec
-	ContentType string
+	CodecType codec.CodecType
 
 	// Plugged interfaces
-	Codecs    map[string]codec.NewCodec
+	newCodec  codec.NewCodec
 	Registry  registry.Registry
 	Selector  selector.Selector
 	Transport transport.Transport
@@ -45,30 +102,8 @@ type Options struct {
 	Context context.Context
 }
 
-type CallOptions struct {
-	// Transport Dial Timeout
-	DialTimeout time.Duration
-	// Number of Call attempts
-	Retries int
-	// Request/Response timeout
-	RequestTimeout time.Duration
-
-	// Other options for implementations of the interface
-	// can be stored in a context
-	Context context.Context
-}
-
-type RequestOptions struct {
-	Stream bool
-
-	// Other options for implementations of the interface
-	// can be stored in a context
-	Context context.Context
-}
-
 func newOptions(options ...Option) Options {
 	opts := Options{
-		Codecs: make(map[string]codec.NewCodec),
 		CallOptions: CallOptions{
 			Retries:        DefaultRetries,
 			RequestTimeout: DefaultRequestTimeout,
@@ -90,24 +125,20 @@ func newOptions(options ...Option) Options {
 		panic("client.Options.Selector is nil")
 	}
 
-	if len(opts.ContentType) == 0 {
-		opts.ContentType = defaultContentType
+	if len(opts.CodecType.String()) == 0 {
+		panic("client.Options.CodecType is nil")
 	}
+
+	opts.newCodec = dubbogoClientConfigMap[opts.CodecType].newCodec
+	opts.Transport = dubbogoClientConfigMap[opts.CodecType].newTransport()
 
 	return opts
 }
 
-// Codec to be used to encode/decode requests for a given content type
-func Codec(contentType string, c codec.NewCodec) Option {
-	return func(o *Options) {
-		o.Codecs[contentType] = c
-	}
-}
-
 // Default content type of the client
-func ContentType(ct string) Option {
+func CodecType(t codec.CodecType) Option {
 	return func(o *Options) {
-		o.ContentType = ct
+		o.CodecType = t
 	}
 }
 
@@ -166,39 +197,5 @@ func RequestTimeout(d time.Duration) Option {
 func DialTimeout(d time.Duration) Option {
 	return func(o *Options) {
 		o.CallOptions.DialTimeout = d
-	}
-}
-
-// Call Options
-
-// WithRetries is a CallOption which overrides that which
-// set in Options.CallOptions
-func WithRetries(i int) CallOption {
-	return func(o *CallOptions) {
-		o.Retries = i
-	}
-}
-
-// WithRequestTimeout is a CallOption which overrides that which
-// set in Options.CallOptions
-func WithRequestTimeout(d time.Duration) CallOption {
-	return func(o *CallOptions) {
-		o.RequestTimeout = d
-	}
-}
-
-// WithDialTimeout is a CallOption which overrides that which
-// set in Options.CallOptions
-func WithDialTimeout(d time.Duration) CallOption {
-	return func(o *CallOptions) {
-		o.DialTimeout = d
-	}
-}
-
-// Request Options
-
-func StreamingRequest() RequestOption {
-	return func(o *RequestOptions) {
-		o.Stream = true
 	}
 }
