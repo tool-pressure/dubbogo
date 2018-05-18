@@ -56,11 +56,13 @@ func (c ServiceConfig) ServiceEqual(url *ServiceURL) bool {
 		return false
 	}
 
-	if c.Group != "" && c.Group != url.Group {
+	//if c.Group != "" && c.Group != url.Group {
+	if c.Group != url.Group {
 		return false
 	}
 
-	if c.Version != "" && c.Version != url.Version {
+	//if c.Version != "" && c.Version != url.Version {
+	if c.Version != url.Version {
 		return false
 	}
 

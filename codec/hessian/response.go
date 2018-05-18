@@ -41,7 +41,7 @@ const (
 
 // hessian decode respone
 func unpackResponseHeaer(buf []byte, m *codec.Message) error {
-	length := len(buf)
+	// length := len(buf)
 	// hessianCodec.ReadHeader has check the header length
 	//if length < HEADER_LENGTH {
 	//	return codec.ErrHeaderNotEnough
@@ -71,8 +71,10 @@ func unpackResponseHeaer(buf []byte, m *codec.Message) error {
 	}
 
 	// Header{status}
+	var err error
 	if buf[3] != Response_OK {
-		return jerrors.Errorf("Response not OK, java exception:%s", string(buf[18:length-1]))
+		err = codec.ErrJavaException
+		// return jerrors.Errorf("Response not OK, java exception:%s", string(buf[18:length-1]))
 	}
 
 	// Header{req id}
@@ -84,7 +86,7 @@ func unpackResponseHeaer(buf []byte, m *codec.Message) error {
 		return codec.ErrIllegalPackage
 	}
 
-	return nil
+	return err
 }
 
 // hessian decode response body

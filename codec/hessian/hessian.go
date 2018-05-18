@@ -16,6 +16,7 @@ import (
 )
 
 import (
+	log "github.com/AlexStocks/log4go"
 	jerrors "github.com/juju/errors"
 )
 
@@ -68,12 +69,22 @@ func (h *hessianCodec) ReadHeader(m *codec.Message, mt codec.MessageType) error 
 		}
 
 		err = unpackResponseHeaer(buf[:], m)
+		if err == codec.ErrJavaException {
+			log.Warn("got java exception")
+			bufSize := h.reader.Buffered()
+			if bufSize > 2 {
+				expBuf, expErr := h.reader.Peek(bufSize)
+				if expErr == nil {
+					log.Warn("java exception:%s", string(expBuf[2:bufSize-1]))
+				}
+			}
+		}
 		if err != nil {
 			return jerrors.Trace(err)
 		}
 		h.rspBodyLen = m.BodyLen
 
-		return jerrors.Trace(err)
+		return nil
 
 	default:
 		return jerrors.Errorf("Unrecognised message type: %v", mt)
@@ -92,11 +103,10 @@ func (h *hessianCodec) ReadBody(ret interface{}) error {
 			return jerrors.Errorf("@ret is nil")
 		}
 
-		if h.reader.Buffered() < h.rspBodyLen {
+		buf, err := h.reader.Peek(h.rspBodyLen)
+		if err == bufio.ErrBufferFull {
 			return codec.ErrBodyNotEnough
 		}
-
-		buf, err := h.reader.Peek(h.rspBodyLen)
 		if err != nil {
 			return jerrors.Trace(err)
 		}

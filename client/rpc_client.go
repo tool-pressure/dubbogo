@@ -297,7 +297,7 @@ func (c *rpcClient) Call(ctx context.Context, request Request, response interfac
 
 		err = c.call(ctx, reqID, *serviceURL, request, response, callOpts)
 		log.Debug("@i{%d}, call(ID{%v}, ctx{%v}, serviceURL{%s}, request{%v}, response{%v}) = err{%v}",
-			i, reqID, ctx, serviceURL, request, response, err)
+			i, reqID, ctx, serviceURL, request, response, jerrors.ErrorStack(err))
 		return jerrors.Trace(err)
 	}
 

@@ -25,6 +25,7 @@ import (
 import (
 	"github.com/AlexStocks/dubbogo/common"
 	"github.com/AlexStocks/dubbogo/registry"
+	"github.com/AlexStocks/dubbogo/version"
 )
 
 //////////////////////////////////////////////
@@ -97,10 +98,10 @@ func newZookeeperRegistry(opts registry.Options) (*zookeeperRegistry, error) {
 		done:              make(chan struct{}),
 	}
 	if r.Name == "" {
-		r.Name = common.NAME
+		r.Name = version.Name
 	}
 	if r.Version == "" {
-		r.Version = common.VERSION
+		r.Version = version.Version
 	}
 	if r.RegistryConfig.Timeout == 0 {
 		r.RegistryConfig.Timeout = DEFAULT_REGISTRY_TIMEOUT
@@ -185,7 +186,6 @@ func (r *zookeeperRegistry) registerTempZookeeperNode(root string, node string) 
 	if err != nil {
 		log.Error("RegisterTempNode(root{%s}, node{%s}) = error{%v}", root, node, jerrors.ErrorStack(err))
 		return jerrors.Annotatef(err, "RegisterTempNode(root{%s}, node{%s})", root, node)
-		return err
 	}
 	// r.registers[zkPath] = ""
 	log.Debug("create a zookeeper node:%s", zkPath)

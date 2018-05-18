@@ -14,6 +14,7 @@ dubbogo 目前版本(0.1.1)支持的codec 是jsonrpc 2.0，transport protocol是
 ---
 - 1 把github.com/AlexStocks/gohessian最新的hessian2解析代码合并到dubbogo/codec/hessian下面；
 - 2 改进tcp transport socket字节流读取机制；
+- 3 registry/config.go:ServiceConfig::ServiceEqual 严格过滤条件。
 
 ### 2018-05-07
 ---
