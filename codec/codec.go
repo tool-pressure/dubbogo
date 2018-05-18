@@ -1,12 +1,9 @@
 package codec
 
 import (
+	"errors"
 	"io"
 	"time"
-)
-
-import (
-	jerrors "github.com/juju/errors"
 )
 
 const (
@@ -17,9 +14,9 @@ const (
 )
 
 var (
-	ErrHeaderNotEnough = jerrors.Errorf("header buffer too short")
-	ErrBodyNotEnough   = jerrors.Errorf("body buffer too short")
-	ErrIllegalPackage  = jerrors.Errorf("illegal pacakge!")
+	ErrHeaderNotEnough = errors.New("header buffer too short")
+	ErrBodyNotEnough   = errors.New("body buffer too short")
+	ErrIllegalPackage  = errors.New("illegal package!")
 )
 
 type MessageType int

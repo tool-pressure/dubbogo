@@ -2,9 +2,12 @@ package jsonrpc
 
 import (
 	"encoding/json"
-	"errors"
 	"io"
 	"sync"
+)
+
+import (
+	jerrors "github.com/juju/errors"
 )
 
 import (
@@ -102,32 +105,32 @@ func (r *serverRequest) UnmarshalJSON(raw []byte) error {
 	r.reset()
 	type req *serverRequest
 	if err := json.Unmarshal(raw, req(r)); err != nil {
-		return errors.New("bad request")
+		return jerrors.New("bad request")
 	}
 
 	var o = make(map[string]*json.RawMessage)
 	if err := json.Unmarshal(raw, &o); err != nil {
-		return errors.New("bad request")
+		return jerrors.New("bad request")
 	}
 	if o["jsonrpc"] == nil || o["method"] == nil {
-		return errors.New("bad request")
+		return jerrors.New("bad request")
 	}
 	_, okID := o["id"]
 	_, okParams := o["params"]
 	if len(o) == 3 && !(okID || okParams) || len(o) == 4 && !(okID && okParams) || len(o) > 4 {
-		return errors.New("bad request")
+		return jerrors.New("bad request")
 	}
 	if r.Version != Version {
-		return errors.New("bad request")
+		return jerrors.New("bad request")
 	}
 	if okParams {
 		if r.Params == nil || len(*r.Params) == 0 {
-			return errors.New("bad request")
+			return jerrors.New("bad request")
 		}
 		switch []byte(*r.Params)[0] {
 		case '[', '{':
 		default:
-			return errors.New("bad request")
+			return jerrors.New("bad request")
 		}
 	}
 	if okID && r.ID == nil {
@@ -135,11 +138,11 @@ func (r *serverRequest) UnmarshalJSON(raw []byte) error {
 	}
 	if okID {
 		if len(*r.ID) == 0 {
-			return errors.New("bad request")
+			return jerrors.New("bad request")
 		}
 		switch []byte(*r.ID)[0] {
 		case 't', 'f', '{', '[':
-			return errors.New("bad request")
+			return jerrors.New("bad request")
 		}
 	}
 
@@ -269,7 +272,7 @@ func (c *serverCodec) Write(m *codec.Message, x interface{}) error {
 	b, ok := c.pending[m.ID]
 	if !ok {
 		c.mutex.Unlock()
-		return errors.New("invalid sequence number in response")
+		return jerrors.New("invalid sequence number in response")
 	}
 	delete(c.pending, m.ID)
 	c.mutex.Unlock()

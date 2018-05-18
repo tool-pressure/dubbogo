@@ -102,7 +102,7 @@ func (r *rpcStream) Recv(msg interface{}) error {
 			r.err = io.ErrUnexpectedEOF
 			return io.ErrUnexpectedEOF
 		}
-		log.Warn("msg{%v}, err{%#v}", msg, jerrors.ErrorStack(err))
+		log.Warn("msg{%v}, err{%s}", msg, jerrors.ErrorStack(err))
 		r.err = err
 		return jerrors.Trace(err)
 	}

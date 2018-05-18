@@ -22,10 +22,13 @@ import (
 )
 
 import (
+	log "github.com/AlexStocks/log4go"
+	jerrors "github.com/juju/errors"
+)
+
+import (
 	"github.com/AlexStocks/dubbogo/common"
 	"github.com/AlexStocks/dubbogo/transport"
-
-	log "github.com/AlexStocks/log4go"
 )
 
 var (
@@ -242,12 +245,12 @@ func (server *rpcServer) register(rcvr Handler) (string, error) {
 	if !isExported(sname) {
 		s := "rpc Register: type " + sname + " is not exported"
 		log.Error(s)
-		return "", errors.New(s)
+		return "", jerrors.New(s)
 	}
 
 	sname = rcvr.Service() //!!serviceMap要根据请求包中的interface来查找Handler，所以此处key使用handler.Interface()返回的值
 	if _, present := server.serviceMap[sname]; present {
-		return "", errors.New("rpc: service already defined: " + sname)
+		return "", jerrors.New("rpc: service already defined: " + sname)
 	}
 	s.name = sname
 	s.method = make(map[string]*methodType)
@@ -265,7 +268,7 @@ func (server *rpcServer) register(rcvr Handler) (string, error) {
 	if len(s.method) == 0 {
 		s := "rpc Register: type " + sname + " has no exported methods of suitable type"
 		log.Error(s)
-		return "", errors.New(s)
+		return "", jerrors.New(s)
 	}
 	server.serviceMap[s.name] = s
 
@@ -514,7 +517,7 @@ func (server *rpcServer) readRequestHeader(codec serverCodec) (service *service,
 		if err == io.EOF || err == io.ErrUnexpectedEOF {
 			return
 		}
-		err = errors.New("rpc: server cannot decode request: " + err.Error())
+		err = jerrors.New("rpc: server cannot decode request: " + err.Error())
 		return
 	}
 
@@ -522,7 +525,7 @@ func (server *rpcServer) readRequestHeader(codec serverCodec) (service *service,
 	// we can still recover and move on to the next request.
 	keepReading = true
 	if req.Service == "" || req.Method == "" {
-		err = errors.New("rpc: service/method request ill-formed: " + req.Service + "/" + req.Method)
+		err = jerrors.New("rpc: service/method request ill-formed: " + req.Service + "/" + req.Method)
 		return
 	}
 	// Look up the request.
@@ -530,12 +533,12 @@ func (server *rpcServer) readRequestHeader(codec serverCodec) (service *service,
 	service = server.serviceMap[req.Service]
 	server.mu.Unlock()
 	if service == nil {
-		err = errors.New("rpc: can't find service " + req.Service)
+		err = jerrors.New("rpc: can't find service " + req.Service)
 		return
 	}
 	mtype = service.method[req.Method]
 	if mtype == nil {
-		err = errors.New("rpc: can't find method " + req.Method + " of service " + req.Service)
+		err = jerrors.New("rpc: can't find method " + req.Method + " of service " + req.Service)
 	}
 	return
 }

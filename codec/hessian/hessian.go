@@ -16,7 +16,6 @@ import (
 )
 
 import (
-	"github.com/AlexStocks/goext/log"
 	jerrors "github.com/juju/errors"
 )
 
@@ -40,7 +39,6 @@ func (h *hessianCodec) String() string {
 }
 
 func (h *hessianCodec) Write(m *codec.Message, a interface{}) error {
-	gxlog.CInfo("@m:%+v, @a:%+v", m, a)
 	switch m.Type {
 	case codec.Request:
 		return jerrors.Trace(packRequest(m, a, h.rwc))
@@ -60,9 +58,6 @@ func (h *hessianCodec) ReadHeader(m *codec.Message, mt codec.MessageType) error 
 	case codec.Request:
 		return nil
 	case codec.Response:
-		if h.reader.Buffered() < HEADER_LENGTH {
-			return codec.ErrHeaderNotEnough
-		}
 		buf, err := h.reader.Peek(HEADER_LENGTH)
 		if err != nil { // this is impossible
 			return jerrors.Trace(err)

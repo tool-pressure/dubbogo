@@ -3,7 +3,6 @@ package transport
 import (
 	"bufio"
 	"bytes"
-	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -161,7 +160,7 @@ func (h *httpTransportClient) Recv(p *Package) error {
 	}
 
 	if rsp.StatusCode != 200 {
-		return errors.New(rsp.Status + ": " + string(b))
+		return jerrors.New(rsp.Status + ": " + string(b))
 	}
 
 	mr := &Package{
@@ -235,7 +234,7 @@ func (h *httpTransportSocket) Reset(c net.Conn, release func()) {
 
 func (h *httpTransportSocket) Recv(p *Package) error {
 	if p == nil {
-		return errors.New("message passed in is nil")
+		return jerrors.New("message passed in is nil")
 	}
 
 	// set timeout if its greater than 0
@@ -516,13 +515,13 @@ func listen(addr string, fn func(string) (net.Listener, error)) (net.Listener, e
 	// extract min port
 	min, err = strconv.Atoi(ports[0])
 	if err != nil {
-		return nil, errors.New("unable to extract port range")
+		return nil, jerrors.New("unable to extract port range")
 	}
 
 	// extract max port
 	max, err = strconv.Atoi(ports[1])
 	if err != nil {
-		return nil, errors.New("unable to extract port range")
+		return nil, jerrors.New("unable to extract port range")
 	}
 
 	// set host

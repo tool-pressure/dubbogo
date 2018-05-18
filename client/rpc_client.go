@@ -30,7 +30,6 @@ import (
 	"github.com/AlexStocks/dubbogo/registry"
 	"github.com/AlexStocks/dubbogo/selector"
 	"github.com/AlexStocks/dubbogo/transport"
-	"github.com/AlexStocks/goext/log"
 )
 
 const (
@@ -105,7 +104,6 @@ func (r *rpcClient) next(request Request, opts CallOptions) (selector.Next, erro
 	}
 
 	// get next nodes from the selector
-	gxlog.CInfo("request:%#v, selector.Select ServiceConfig:%#v", request, request.ServiceConfig())
 	return r.opts.Selector.Select(request.ServiceConfig())
 }
 
@@ -252,8 +250,6 @@ func (c *rpcClient) Call(ctx context.Context, request Request, response interfac
 	for _, opt := range opts {
 		opt(&callOpts)
 	}
-
-	gxlog.CInfo("c:%+v, opts:%+v", c, c.opts)
 
 	// get next nodes selection func from the selector
 	next, err := c.next(request, callOpts)

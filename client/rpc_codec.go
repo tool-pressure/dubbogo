@@ -14,6 +14,7 @@ package client
 
 import (
 	"bytes"
+	"errors"
 	"time"
 )
 
@@ -40,7 +41,7 @@ func (e serverError) Error() string {
 
 // errShutdown holds the specific error for closing/closed connections
 var (
-	errShutdown = jerrors.New("connection is shut down")
+	errShutdown = errors.New("connection is shut down")
 )
 
 type rpcCodec struct {

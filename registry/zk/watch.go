@@ -11,7 +11,6 @@
 package zookeeper
 
 import (
-	"errors"
 	"path"
 	"sync"
 	"time"
@@ -294,7 +293,7 @@ func (w *zookeeperWatcher) watchService(zkPath string, conf registry.ServiceConf
 func (w *zookeeperWatcher) Next() (*registry.Result, error) {
 	select {
 	case <-w.client.done():
-		return nil, errors.New("watcher stopped")
+		return nil, jerrors.New("watcher stopped")
 	case r := <-w.events:
 		return r.res, r.err
 	}
