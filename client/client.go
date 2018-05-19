@@ -101,7 +101,7 @@ var (
 			codecType:     codec.CODECTYPE_DUBBO,
 			newCodec:      hessian.NewCodec,
 			transportType: codec.TRANSPORT_TCP,
-			newTransport:  transport.NewTcpTransport,
+			newTransport:  transport.NewTCPTransport,
 		},
 	}
 

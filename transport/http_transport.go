@@ -57,7 +57,7 @@ type httpTransportClient struct {
 	buff *bufio.Reader
 }
 
-func initHttpTransportClient(
+func initHTTPTransportClient(
 	ht *httpTransport,
 	addr string,
 	conn net.Conn,
@@ -213,7 +213,7 @@ const (
 	REQ_Q_SIZE = 1 // http1.1形式的短连接，一次也只能处理一个请求，放大size无意义
 )
 
-func initHttpTransportSocket(ht *httpTransport, c net.Conn, release func()) *httpTransportSocket {
+func initHTTPTransportSocket(ht *httpTransport, c net.Conn, release func()) *httpTransportSocket {
 	return &httpTransportSocket{
 		ht:        ht,
 		conn:      c,
@@ -390,7 +390,7 @@ type httpTransportListener struct {
 	sem      chan struct{}
 }
 
-func initHttpTransportListener(ht *httpTransport, listener net.Listener) *httpTransportListener {
+func initHTTPTransportListener(ht *httpTransport, listener net.Listener) *httpTransportListener {
 	return &httpTransportListener{
 		ht:       ht,
 		listener: listener,
@@ -440,7 +440,7 @@ func (h *httpTransportListener) Accept(fn func(Socket)) error {
 			return jerrors.Trace(err)
 		}
 
-		sock := initHttpTransportSocket(h.ht, c, h.release)
+		sock := initHTTPTransportSocket(h.ht, c, h.release)
 
 		// 逻辑执行再单独启动一个goroutine
 		go func() {
@@ -485,7 +485,7 @@ func (h *httpTransport) Dial(addr string, opts ...DialOption) (Client, error) {
 		return nil, jerrors.Trace(err)
 	}
 
-	return initHttpTransportClient(h, addr, conn, dopts), nil
+	return initHTTPTransportClient(h, addr, conn, dopts), nil
 }
 
 func listen(addr string, fn func(string) (net.Listener, error)) (net.Listener, error) {
@@ -560,7 +560,7 @@ func (h *httpTransport) Listen(addr string, opts ...ListenOption) (Listener, err
 		return nil, err
 	}
 
-	return initHttpTransportListener(h, l), nil
+	return initHTTPTransportListener(h, l), nil
 }
 
 func (h *httpTransport) String() string {

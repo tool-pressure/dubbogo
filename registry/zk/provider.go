@@ -166,7 +166,7 @@ func (s *providerZookeeperRegistry) register(conf *registry.ProviderServiceConfi
 	params.Add("owner", s.ApplicationConfig.Owner)
 	params.Add("side", (DubboType(PROVIDER)).Role())
 	params.Add("pid", processID)
-	params.Add("ip", localIp)
+	params.Add("ip", localIP)
 	params.Add("timeout", fmt.Sprintf("%v", s.Timeout))
 	// params.Add("timestamp", time.Now().Format("20060102150405"))
 	params.Add("timestamp", fmt.Sprintf("%d", s.birth))
@@ -178,7 +178,7 @@ func (s *providerZookeeperRegistry) register(conf *registry.ProviderServiceConfi
 	}
 	log.Debug("provider zk url params:%#v", params)
 	if conf.Path == "" {
-		conf.Path = localIp
+		conf.Path = localIP
 	}
 
 	urlPath = conf.Service

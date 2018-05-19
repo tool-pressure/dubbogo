@@ -66,6 +66,6 @@ func NewHTTPTransport(opts ...Option) Transport {
 	return newHTTPTransport(opts...)
 }
 
-func NewTcpTransport(opts ...Option) Transport {
-	return newTcpTransport(opts...)
+func NewTCPTransport(opts ...Option) Transport {
+	return newTCPTransport(opts...)
 }

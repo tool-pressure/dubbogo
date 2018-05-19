@@ -56,7 +56,7 @@ func (rwc *readWriteCloser) Close() error {
 	return nil
 }
 
-func newRpcCodec(req *transport.Package, socket transport.Socket, c codec.NewCodec) serverCodec {
+func newRPCCodec(req *transport.Package, socket transport.Socket, c codec.NewCodec) serverCodec {
 	rwc := &readWriteCloser{
 		rbuf: bytes.NewBuffer(req.Body),
 		wbuf: bytes.NewBuffer(nil),

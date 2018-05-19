@@ -46,12 +46,12 @@ var (
 	DubboRole        = [...]string{"consumer", "", "", "provider"}
 	RegistryZkClient = "zk registry"
 	processID        = ""
-	localIp          = ""
+	localIP          = ""
 )
 
 func init() {
 	processID = fmt.Sprintf("%d", os.Getpid())
-	localIp, _ = common.GetLocalIP(localIp)
+	localIP, _ = common.GetLocalIP(localIP)
 }
 
 func (t DubboType) String() string {

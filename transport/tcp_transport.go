@@ -27,8 +27,8 @@ import (
 )
 
 const (
-	DefaultTcpReadBufferSize  = 256 * 1024
-	DefaultTcpWriteBufferSize = 128 * 1024
+	DefaultTCPReadBufferSize  = 256 * 1024
+	DefaultTCPWriteBufferSize = 128 * 1024
 )
 
 //////////////////////////////////////////////
@@ -42,7 +42,7 @@ type tcpTransportSocket struct {
 	release func()
 }
 
-func initTcpTransportSocket(t *tcpTransport, c net.Conn, release func()) *tcpTransportSocket {
+func initTCPTransportSocket(t *tcpTransport, c net.Conn, release func()) *tcpTransportSocket {
 	return &tcpTransportSocket{
 		t:       t,
 		conn:    c,
@@ -111,7 +111,7 @@ type tcpTransportClient struct {
 	conn net.Conn
 }
 
-func initTcpTransportClient(t *tcpTransport, conn net.Conn) *tcpTransportClient {
+func initTCPTransportClient(t *tcpTransport, conn net.Conn) *tcpTransportClient {
 	return &tcpTransportClient{
 		t:    t,
 		conn: conn,
@@ -179,7 +179,7 @@ type tcpTransportListener struct {
 	sem      chan struct{}
 }
 
-func initTcpTransportListener(t *tcpTransport, listener net.Listener) *tcpTransportListener {
+func initTCPTransportListener(t *tcpTransport, listener net.Listener) *tcpTransportListener {
 	return &tcpTransportListener{
 		t:        t,
 		listener: listener,
@@ -229,11 +229,11 @@ func (t *tcpTransportListener) Accept(fn func(Socket)) error {
 		}
 
 		if tcpConn, ok := c.(*net.TCPConn); ok {
-			tcpConn.SetReadBuffer(DefaultTcpReadBufferSize)
-			tcpConn.SetWriteBuffer(DefaultTcpWriteBufferSize)
+			tcpConn.SetReadBuffer(DefaultTCPReadBufferSize)
+			tcpConn.SetWriteBuffer(DefaultTCPWriteBufferSize)
 		}
 
-		sock := initTcpTransportSocket(t.t, c, t.release)
+		sock := initTCPTransportSocket(t.t, c, t.release)
 
 		go func() {
 			defer func() {
@@ -276,7 +276,7 @@ func (t *tcpTransport) Dial(addr string, opts ...DialOption) (Client, error) {
 		return nil, jerrors.Trace(err)
 	}
 
-	return initTcpTransportClient(t, conn), nil
+	return initTCPTransportClient(t, conn), nil
 }
 
 func (t *tcpTransport) Listen(addr string, opts ...ListenOption) (Listener, error) {
@@ -293,14 +293,14 @@ func (t *tcpTransport) Listen(addr string, opts ...ListenOption) (Listener, erro
 		return nil, jerrors.Trace(err)
 	}
 
-	return initTcpTransportListener(t, l), nil
+	return initTCPTransportListener(t, l), nil
 }
 
 func (t *tcpTransport) String() string {
 	return "tcp-transport"
 }
 
-func newTcpTransport(opts ...Option) Transport {
+func newTCPTransport(opts ...Option) Transport {
 	var options Options
 	for _, o := range opts {
 		o(&options)

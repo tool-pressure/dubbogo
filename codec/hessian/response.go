@@ -174,7 +174,7 @@ func cpMap(in, out interface{}) error {
 	outValueType := outMap.Type().Elem()
 	outValueKind := outValueType.Kind()
 	var inKey, inValue reflect.Value
-	for k, _ := range inMap {
+	for k := range inMap {
 		if outKeyKind != reflect.Struct {
 			inKey = reflect.ValueOf(k)
 		} else {

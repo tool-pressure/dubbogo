@@ -24,7 +24,7 @@ func init() {
 	rand.Seed(time.Now().UnixNano())
 }
 
-type SelectorModeFunc func([]*registry.ServiceURL) Next
+type ModeFunc func([]*registry.ServiceURL) Next
 
 // Random is a random strategy algorithm for node selection
 func random(services []*registry.ServiceURL) Next {
@@ -61,11 +61,11 @@ func roundRobin(services []*registry.ServiceURL) Next {
 // selector mode
 //////////////////////////////////////////
 
-// SelectorMode defines the algorithm of selecting a provider from cluster
-type SelectorMode int
+// Mode defines the algorithm of selecting a provider from cluster
+type Mode int
 
 const (
-	SM_BEGIN SelectorMode = iota
+	SM_BEGIN Mode = iota
 	SM_Random
 	SM_RoundRobin
 	SM_END
@@ -78,7 +78,7 @@ var selectorModeStrings = [...]string{
 	"End",
 }
 
-func (s SelectorMode) String() string {
+func (s Mode) String() string {
 	if SM_BEGIN < s && s < SM_END {
 		return selectorModeStrings[s]
 	}
@@ -87,7 +87,7 @@ func (s SelectorMode) String() string {
 }
 
 var (
-	selectorModeFuncs = []SelectorModeFunc{
+	selectorModeFuncs = []ModeFunc{
 		SM_BEGIN:      random,
 		SM_Random:     random,
 		SM_RoundRobin: roundRobin,
@@ -95,7 +95,7 @@ var (
 	}
 )
 
-func SelectorNext(mode SelectorMode) SelectorModeFunc {
+func SelectorNext(mode Mode) ModeFunc {
 	if mode < SM_BEGIN || SM_END < mode {
 		mode = SM_Random
 	}

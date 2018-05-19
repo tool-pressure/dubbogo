@@ -10,7 +10,7 @@ import (
 
 type Options struct {
 	Registry registry.Registry
-	Mode     SelectorMode // selector mode
+	Mode     Mode // selector mode
 
 	// Other options for implementations of the interface
 	// can be stored in a context
@@ -28,7 +28,7 @@ func Registry(r registry.Registry) Option {
 }
 
 // SetStrategy sets the default strategy for the selector
-func SelectMode(mode SelectorMode) Option {
+func SelectMode(mode Mode) Option {
 	return func(o *Options) {
 		o.Mode = mode
 	}

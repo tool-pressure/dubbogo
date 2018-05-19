@@ -25,7 +25,7 @@ type rpcRequest struct {
 	opts        RequestOptions
 }
 
-func newRpcRequest(group, protocol, version, service, method string, args interface{},
+func newRPCRequest(group, protocol, version, service, method string, args interface{},
 	contentType string, reqOpts ...RequestOption) Request {
 
 	var opts RequestOptions

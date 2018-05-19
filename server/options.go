@@ -26,7 +26,7 @@ type Options struct {
 	Registry  registry.Registry
 	Transport transport.Transport
 
-	ServerConfList  []registry.ServerConfig
+	ConfList  []registry.ServerConfig
 	ServiceConfList []registry.ServiceConfig
 	// Other options for implementations of the interface
 	// can be stored in a context
@@ -74,11 +74,11 @@ func Transport(t transport.Transport) Option {
 	}
 }
 
-func ServerConfList(confList []registry.ServerConfig) Option {
+func ConfList(confList []registry.ServerConfig) Option {
 	return func(o *Options) {
-		o.ServerConfList = confList
-		for i := 0; i < len(o.ServerConfList); i++ {
-			o.ServerConfList[i].IP, _ = common.GetLocalIP(o.ServerConfList[i].IP)
+		o.ConfList = confList
+		for i := 0; i < len(o.ConfList); i++ {
+			o.ConfList[i].IP, _ = common.GetLocalIP(o.ConfList[i].IP)
 		}
 	}
 }

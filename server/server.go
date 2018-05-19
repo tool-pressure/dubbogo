@@ -47,8 +47,8 @@ func newServer(opts ...Option) Server {
 		num int
 	)
 	options := newOptions(opts...)
-	servers := make([]*rpcServer, len(options.ServerConfList))
-	num = len(options.ServerConfList)
+	servers := make([]*rpcServer, len(options.ConfList))
+	num = len(options.ConfList)
 	for i := 0; i < num; i++ {
 		servers[i] = initServer()
 	}
@@ -114,8 +114,8 @@ func (s *server) handlePkg(servo interface{}, sock transport.Socket) {
 		}
 
 		// !!!! 雷同于consumer/rpc_client中那个关键的一句，把github.com/AlexStocks/dubbogo/transport & github.com/AlexStocks/dubbogo/codec结合了起来
-		// newRpcCodec(*transport.Message, transport.Socket, codec.NewCodec)
-		codec = newRpcCodec(&pkg, sock, codecFunc)
+		// newRPCCodec(*transport.Message, transport.Socket, codec.NewCodec)
+		codec = newRPCCodec(&pkg, sock, codecFunc)
 
 		// strip our headers
 		header = make(map[string]string)
@@ -209,7 +209,7 @@ func (s *server) Handle(h Handler) error {
 
 	flag = 0
 	serviceNum = len(config.ServiceConfList)
-	serverNum = len(config.ServerConfList)
+	serverNum = len(config.ConfList)
 	for i = 0; i < serviceNum; i++ {
 		if config.ServiceConfList[i].Service == serviceConf.Service &&
 			config.ServiceConfList[i].Version == serviceConf.Version {
@@ -218,7 +218,7 @@ func (s *server) Handle(h Handler) error {
 			serviceConf.Group = config.ServiceConfList[i].Group
 			// serviceConf.Version = config.ServiceConfList[i].Version
 			for j = 0; j < serverNum; j++ {
-				if config.ServerConfList[j].Protocol == serviceConf.Protocol {
+				if config.ConfList[j].Protocol == serviceConf.Protocol {
 					s.Lock()
 					serviceConf.Methods, err = s.rpc[j].register(h)
 					s.Unlock()
@@ -226,7 +226,7 @@ func (s *server) Handle(h Handler) error {
 						return err
 					}
 
-					serviceConf.Path = config.ServerConfList[j].Address()
+					serviceConf.Path = config.ConfList[j].Address()
 					err = config.Registry.Register(serviceConf)
 					if err != nil {
 						return err
@@ -259,9 +259,9 @@ func (s *server) Start() error {
 	)
 	config = s.Options()
 
-	serverNum = len(config.ServerConfList)
+	serverNum = len(config.ConfList)
 	for i = 0; i < serverNum; i++ {
-		listener, err = config.Transport.Listen(config.ServerConfList[i].Address())
+		listener, err = config.Transport.Listen(config.ConfList[i].Address())
 		if err != nil {
 			return err
 		}

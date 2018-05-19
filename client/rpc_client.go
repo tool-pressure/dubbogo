@@ -174,7 +174,7 @@ func (c *rpcClient) call(ctx context.Context, reqID int64, service registry.Serv
 		serviceURL: service,
 		request:    req,
 		closed:     make(chan struct{}),
-		codec:      newRpcCodec(pkg, conn, c.opts.newCodec),
+		codec:      newRPCCodec(pkg, conn, c.opts.newCodec),
 	}
 
 	defer func() {
@@ -205,7 +205,7 @@ func (c *rpcClient) call(ctx context.Context, reqID int64, service registry.Serv
 		}()
 
 		// send request
-		// 1 stream的send函数调用rpcStream.clientCodec.WriteRequest函数(从line 119可见clientCodec实际是newRpcCodec);
+		// 1 stream的send函数调用rpcStream.clientCodec.WriteRequest函数(从line 119可见clientCodec实际是newRPCCodec);
 		// 2 rpcCodec.WriteRequest调用了codec.Write(codec.Message, body)，在给request赋值后，然后又调用了transport.Send函数
 		// 3 httpTransportClient根据m{header, body}拼凑http.Request{header, body}，然后再调用http.Request.Write把请求以tcp协议的形式发送出去
 		if err = stream.Send(req.Args(), reqTimeout); err != nil {
@@ -338,7 +338,7 @@ func (c *rpcClient) NewRequest(group, version, service, method string, args inte
 	if dubbogoClientConfigMap[c.opts.CodecType].transportType == codec.TRANSPORT_TCP {
 		reqOpts = append(reqOpts, StreamingRequest())
 	}
-	return newRpcRequest(group, codecType, version, service, method, args, codec2ContentType[codecType], reqOpts...)
+	return newRPCRequest(group, codecType, version, service, method, args, codec2ContentType[codecType], reqOpts...)
 }
 
 func (c *rpcClient) String() string {

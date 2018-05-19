@@ -169,7 +169,7 @@ func (c *consumerZookeeperRegistry) register(conf *registry.ServiceConfig) error
 	params.Add("owner", c.Owner)
 	params.Add("side", (DubboType(CONSUMER)).Role())
 	params.Add("pid", processID)
-	params.Add("ip", localIp)
+	params.Add("ip", localIP)
 	params.Add("timeout", fmt.Sprintf("%v", c.Timeout))
 	// params.Add("timestamp", time.Now().Format("20060102150405"))
 	params.Add("timestamp", fmt.Sprintf("%d", c.birth))
@@ -177,7 +177,7 @@ func (c *consumerZookeeperRegistry) register(conf *registry.ServiceConfig) error
 		params.Add("version", conf.Version)
 	}
 	// log.Debug("consumer zk url params:%#v", params)
-	rawURL = fmt.Sprintf("%s://%s/%s?%s", conf.Protocol, localIp, conf.Service+conf.Version, params.Encode())
+	rawURL = fmt.Sprintf("%s://%s/%s?%s", conf.Protocol, localIP, conf.Service+conf.Version, params.Encode())
 	encodedURL = url.QueryEscape(rawURL)
 	// log.Debug("url.QueryEscape(consumer url:%s) = %s", rawURL, encodedURL)
 

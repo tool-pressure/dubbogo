@@ -46,7 +46,7 @@ func (s *server) handlePkg(servo interface{}, sock transport.Socket) {
 	// }
 
 	codecFunc, err = s.newCodec(contentType) // dubbogo.codec
-	codec = newRpcCodec(&pkg, sock, codecFunc)
+	codec = newRPCCodec(&pkg, sock, codecFunc)
 	rpc.serveRequest(ctx, codec, contentType)
 	// func (server *server) serveRequest(ctx context.Context, codec serverCodec, ct string) error {
 	//   server.readRequest(codec)
