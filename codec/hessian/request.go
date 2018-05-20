@@ -41,7 +41,7 @@ const (
 	// header length.
 	HEADER_LENGTH = 16
 
-	// magic header.
+	// magic header
 	MAGIC      = uint16(0xdabb)
 	MAGIC_HIGH = byte(0xda)
 	MAGIC_LOW  = byte(0xbb)
@@ -51,7 +51,7 @@ const (
 	FLAG_TWOWAY  = byte(0x40)
 	FLAG_EVENT   = byte(0x20) // for heartbeat
 
-	SERIALIZATION_MASK = byte(0x1f)
+	SERIALIZATION_MASK = 0x1f
 
 	DUBBO_VERSION = "2.5.4"
 	DEFAULT_LEN   = 8388608 // 8 * 1024 * 1024 default body max length
@@ -147,17 +147,19 @@ func getArgsTypeList(args []interface{}) (string, error) {
 	return types, nil
 }
 
+// dubbo-remoting/dubbo-remoting-api/src/main/java/com/alibaba/dubbo/remoting/exchange/codec/ExchangeCodec.java
+// v2.5.4 line 204 encodeRequest
 func packRequest(m *codec.Message, a interface{}, w io.Writer) error {
 	var (
-		err             error
-		types           string
-		byteArray       []byte
-		encoder         Encoder
-		version         string
-		ok              bool
-		args            []interface{}
-		pkgLen          int
-		sirializationID = byte(0xFB) // java 中标识一个class的ID
+		err           error
+		types         string
+		byteArray     []byte
+		encoder       Encoder
+		version       string
+		ok            bool
+		args          []interface{}
+		pkgLen        int
+		serviceParams map[string]string
 	)
 
 	if args, ok = a.([]interface{}); !ok {
@@ -165,20 +167,29 @@ func packRequest(m *codec.Message, a interface{}, w io.Writer) error {
 	}
 
 	//////////////////////////////////////////
-	// header
+	// byteArray
 	//////////////////////////////////////////
 	// magic
 	byteArray = append(byteArray, DubboHeader[:]...)
 	// serialization id, two way flag, event, request/response flag
-	byteArray[2] |= byte(sirializationID & SERIALIZATION_MASK)
+	// java 中标识一个class的ID
+	byteArray[2] |= byte(m.ID & SERIALIZATION_MASK)
 	// request id
 	binary.BigEndian.PutUint64(byteArray[4:], uint64(m.ID))
+	if m.Type == codec.Heartbeat {
+		byteArray[2] |= byte(FLAG_EVENT)
+	}
 	encoder.Append(byteArray[:HEADER_LENGTH])
 
 	// com.alibaba.dubbo.rpc.protocol.dubbo.DubboCodec.DubboCodec.java line144 encodeRequestData
 	//////////////////////////////////////////
 	// body
 	//////////////////////////////////////////
+	if m.Type == codec.Heartbeat {
+		encoder.Encode(string("null"))
+		goto END
+	}
+
 	// dubbo version + path + version + method
 	encoder.Encode(DUBBO_VERSION)
 	encoder.Encode(m.Target)
@@ -195,7 +206,7 @@ func packRequest(m *codec.Message, a interface{}, w io.Writer) error {
 		encoder.Encode(v)
 	}
 
-	serviceParams := make(map[string]string)
+	serviceParams = make(map[string]string)
 	serviceParams["path"] = m.ServicePath
 	serviceParams["interface"] = m.Target
 	if len(version) != 0 {
@@ -212,9 +223,10 @@ func packRequest(m *codec.Message, a interface{}, w io.Writer) error {
 	if pkgLen > int(DEFAULT_LEN) { // 8M
 		return jerrors.Errorf("Data length %d too large, max payload %d", pkgLen, DEFAULT_LEN)
 	}
-	// header{body length}
+	// byteArray{body length}
 	binary.BigEndian.PutUint32(byteArray[12:], uint32(pkgLen-HEADER_LENGTH))
 
+END:
 	pkgLen, err = w.Write(encoder.Buffer())
 	if err != nil {
 		return jerrors.Trace(err)

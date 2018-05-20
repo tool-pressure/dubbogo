@@ -26,7 +26,7 @@ type Options struct {
 	Registry  registry.Registry
 	Transport transport.Transport
 
-	ConfList  []registry.ServerConfig
+	ConfList        []registry.ServerConfig
 	ServiceConfList []registry.ServiceConfig
 	// Other options for implementations of the interface
 	// can be stored in a context
