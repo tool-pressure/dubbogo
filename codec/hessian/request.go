@@ -58,7 +58,7 @@ const (
 )
 
 var (
-	DubboHeader = [HEADER_LENGTH]byte{MAGIC_HIGH, MAGIC_LOW, FLAG_TWOWAY | FLAG_REQUEST}
+	DubboHeader = [HEADER_LENGTH]byte{MAGIC_HIGH, MAGIC_LOW, FLAG_REQUEST | FLAG_TWOWAY}
 )
 
 // com.alibaba.dubbo.common.utils.ReflectUtils.ReflectUtils.java line245 getDesc
@@ -178,6 +178,8 @@ func packRequest(m *codec.Message, a interface{}, w io.Writer) error {
 	binary.BigEndian.PutUint64(byteArray[4:], uint64(m.ID))
 	if m.Type == codec.Heartbeat {
 		byteArray[2] |= byte(FLAG_EVENT)
+	} else {
+		byteArray[2] |= byte(FLAG_REQUEST)
 	}
 	encoder.Append(byteArray[:HEADER_LENGTH])
 
@@ -186,7 +188,7 @@ func packRequest(m *codec.Message, a interface{}, w io.Writer) error {
 	// body
 	//////////////////////////////////////////
 	if m.Type == codec.Heartbeat {
-		encoder.Encode(string("null"))
+		encoder.Encode(nil)
 		goto END
 	}
 
@@ -207,17 +209,18 @@ func packRequest(m *codec.Message, a interface{}, w io.Writer) error {
 	}
 
 	serviceParams = make(map[string]string)
-	serviceParams["path"] = m.ServicePath
-	serviceParams["interface"] = m.Target
+	serviceParams[PATH_KEY] = m.ServicePath
+	serviceParams[INTERFACE_KEY] = m.Target
 	if len(version) != 0 {
-		serviceParams["version"] = version
+		serviceParams[VERSION_KEY] = version
 	}
 	if m.Timeout != 0 {
-		serviceParams["timeout"] = strconv.Itoa(int(m.Timeout / time.Millisecond))
+		serviceParams[TIMEOUT_KEY] = strconv.Itoa(int(m.Timeout / time.Millisecond))
 	}
 
 	encoder.Encode(serviceParams)
 
+END:
 	byteArray = encoder.Buffer()
 	pkgLen = len(byteArray)
 	if pkgLen > int(DEFAULT_LEN) { // 8M
@@ -226,7 +229,6 @@ func packRequest(m *codec.Message, a interface{}, w io.Writer) error {
 	// byteArray{body length}
 	binary.BigEndian.PutUint32(byteArray[12:], uint32(pkgLen-HEADER_LENGTH))
 
-END:
 	pkgLen, err = w.Write(encoder.Buffer())
 	if err != nil {
 		return jerrors.Trace(err)

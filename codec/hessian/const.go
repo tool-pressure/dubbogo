@@ -116,6 +116,11 @@ const (
 	ARRAY_BOOL       = "[boolean"
 	ARRAY_LONG       = "[long"
 
+	PATH_KEY      = "path"
+	INTERFACE_KEY = "interface"
+	VERSION_KEY   = "version"
+	TIMEOUT_KEY   = "timeout"
+
 	STRING_NIL   = "null"
 	STRING_TRUE  = "true"
 	STRING_FALSE = "false"
