@@ -26,6 +26,14 @@ a golang micro-service framework compatible with alibaba dubbo. just using jsonr
 - 5 把dubbog-examples client下面一些默认配置放到client package 下面
 - 6 把hessian codec和rpc client对接起来
 
+
+
+## 2017-10-05
+
+* 1 dubbogo/codec/hessian添加 go int +struct 对应 java enum；
+
+
+
 ### 2016-10-26 ###
 ---
 - 1 添加 github.com/AlexStocks/dubbogo-examples/calculator/java-server 作为client_test.go的mock服务端
@@ -85,8 +93,8 @@ b 第二个service启动后，dubbogo/registry/zk:(zookeeperWatcher) watchDir()�
 
 - 2 测试过程发现dubbogo/registry/zk:zookeeperClient) handleZkEvent()已经能够应对zk启停(死掉重启)的情况，所以注释掉这两个函数:
 
-    > a dubbogo/registry/zk:(consumerZookeeperRegistry)reconnectZkRegistr()
-    > b dubbogo/registry/zk:(providerZookeeperRegistry)reconnectZkRegistr()
+    > a dubbogo/registry/zk:(consumerZookeeperRegistry)reconnectZkRegister()
+    > b dubbogo/registry/zk:(providerZookeeperRegistry)reconnectZkRegister()
 
 ### 2016-08-10 ###
 ---
