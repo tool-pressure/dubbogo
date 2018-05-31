@@ -26,7 +26,11 @@ a golang micro-service framework compatible with alibaba dubbo. just using jsonr
 - 5 把dubbog-examples client下面一些默认配置放到client package 下面
 - 6 把hessian codec和rpc client对接起来
 
+### 2018-04-19
 
+------
+
+- 1 bug fix: registry/zk/server.go:handleZkRestart() 把services从函数开头移动到重复注册的for-loop外面，以防止 zk 不断重启时，这个数组可能有重复元素的问题；
 
 ## 2017-10-05
 
@@ -42,10 +46,7 @@ a golang micro-service framework compatible with alibaba dubbo. just using jsonr
 ---
 - 1 把所有有关ID的field的type由uint64改为int64，因为java没有uint64类型 
 
-### 2018-04-19 ###
----
-- 1 bug fix: registry/zk/server.go:handleZkRestart() 把services从函数开头移动到重复注册的for-loop外面，以防止 zk 不断重启时，这个数组可能有重复元素的问题；
-
+###  ###
 ### 2016-10-22 ###
 ---
 - 1 modify registry/zk/client.go:(consumerZookeeperRegistry)register to normalize zookeeper consumer url

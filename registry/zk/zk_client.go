@@ -117,7 +117,7 @@ LOOP:
 			break LOOP
 		case event = <-session:
 			log.Warn("client{%s} get a zookeeper event{type:%s, server:%s, path:%s, state:%d-%s, err:%v}",
-				z.name, event.Type.String(), event.Server, event.Path, event.State, stateToString(event.State), event.Err)
+				z.name, event.Type, event.Server, event.Path, event.State, stateToString(event.State), event.Err)
 			switch (int)(event.State) {
 			case (int)(zk.StateDisconnected):
 				log.Warn("zk{addr:%s} state is StateDisconnected, so close the zk client{name:%s}.", z.zkAddrs, z.name)
