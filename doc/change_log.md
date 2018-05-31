@@ -36,8 +36,6 @@ a golang micro-service framework compatible with alibaba dubbo. just using jsonr
 
 * 1 dubbogo/codec/hessian添加 go int +struct 对应 java enum；
 
-
-
 ### 2016-10-26 ###
 ---
 - 1 添加 github.com/AlexStocks/dubbogo-examples/calculator/java-server 作为client_test.go的mock服务端
@@ -73,24 +71,24 @@ a golang micro-service framework compatible with alibaba dubbo. just using jsonr
 ### 2016-08-12 ###
 ---
 - 1 测试过程中发现，dubbogo/registry/zk/registry.go:(zookeeperRegistry)validateZookeeperClient()之后使用了RegistryZkClient,修改如下代码：
-    > a dubbogo/registry/zk/client.go:NewConsumerZookeeperRegistry()中调用newZookeeperRegistry后添加clause “reg.client.name = ConsumerRegistryZkClient";
-    > b dubbogo/registry/zk/server.go:NewProviderZookeeperRegistry()中调用newZookeeperRegistry后添加clause “reg.client.name = ProviderRegistryZkClient";
+    * a dubbogo/registry/zk/client.go:NewConsumerZookeeperRegistry()中调用newZookeeperRegistry后添加clause “reg.client.name = ConsumerRegistryZkClient";
+    * b dubbogo/registry/zk/server.go:NewProviderZookeeperRegistry()中调用newZookeeperRegistry后添加clause “reg.client.name = ProviderRegistryZkClient";
 - 2 修正dubbogo/registry/zk/client.go和dubbogo/registry/zk/server.go中的同样处理zk重启事件的函数handleZkRestart中的相关逻辑
    此处须注意zk重启后会load之前的数据，导致启动之前注册的tmp节点数据又被load进来，大概10s之后才会被zk删除掉。
 - 3 修正dubbogo/transport/http_transport.go中有关httpTransport成员相关的grammar error
 
 ### 2016-08-11 ###
 ---
-- 1 测试过程中发现，如果一个zkPath下的node为空，而后添加一个node的时候，dubbo/registry/zk/watch.go:(zookeeperWatcher)watchDir()函数中for-select clause中time.After会导致watcher不能及时收到相关的event，如果剔除time.After又会导致疯狂for-select以致于影响程序性能，现做以下修改:
+- 1 测试过程中发现，如果一个zkPath下的node为空，而后添加一个node的时候，dubbo/registry/zk/watch.go:(zookeeperWatcher)watchDir()
+    函数中for-select clause中time.After会导致watcher不能及时收到相关的event，如果剔除time.After又会导致疯狂for-select以致于影响程序性能，现做以下修改:
 
-    > a dubbo/registry/zk/zk_client.go中添加zookeeperClienit{entryRegistry}以及相关函数;
-    b dubbo/registry/zk/watch.go:(zookeeperWatcher)watchDir() for-select添加一个case分支，以处理zkClient发来的event;
+    * a dubbo/registry/zk/zk_client.go中添加zookeeperClient{entryRegistry}以及相关函数;
+    * b dubbo/registry/zk/watch.go:(zookeeperWatcher)watchDir() for-select添加一个case分支，以处理zkClient发来的event;
 
+    所以发生所有服务死掉的情况时，dubbogo的服务发现过程为:
 
-所以发生所有服务死掉的情况时，dubbogo的服务发现过程为:
-
->a 第一个service的发现，要依靠dubbogo/registry/zk:(zookeeperClient) handleZkEvent()通知dubbogo/registry/zk:(zookeeperWatcher) watchDir()；
-b 第二个service启动后，dubbogo/registry/zk:(zookeeperWatcher) watchDir()自身能否及时发现值。
+    * a 第一个service的发现，要依靠dubbogo/registry/zk:(zookeeperClient) handleZkEvent()通知dubbogo/registry/zk:(zookeeperWatcher) watchDir()；
+    * b 第二个service启动后，dubbogo/registry/zk:(zookeeperWatcher) watchDir()自身能否及时发现值。
 
 - 2 测试过程发现dubbogo/registry/zk:zookeeperClient) handleZkEvent()已经能够应对zk启停(死掉重启)的情况，所以注释掉这两个函数:
 
@@ -108,10 +106,10 @@ b 第二个service启动后，dubbogo/registry/zk:(zookeeperWatcher) watchDir()�
 
 - 5 为了dubbogo/registry/client与registry连接断开的情况下，dubbogo/selector能继续稳定地提供服务，修改：
 
-     > a dubbogo/registry/zk/watch.go:(zookeeperWatcher)watchDir()里面的watchServiceNode goroutine;
-     b dubbogo/registry/zk/watch.go:(zookeeperWatcher)watchService()里面的watchServiceNode goroutine;
-     c dubbogo/registry/zk/watch.go:(zookeeperWatcher)watchService()添加Valid method;
-     d dubbogo/selector/cache.go:(cacheSelector) watch()中的for循环时收到delete event时检查watcher.Valid;
+     * a dubbogo/registry/zk/watch.go:(zookeeperWatcher)watchDir()里面的watchServiceNode goroutine;
+     * b dubbogo/registry/zk/watch.go:(zookeeperWatcher)watchService()里面的watchServiceNode goroutine;
+     * c dubbogo/registry/zk/watch.go:(zookeeperWatcher)watchService()添加Valid method;
+     * d dubbogo/selector/cache.go:(cacheSelector) watch()中的for循环时收到delete event时检查watcher.Valid;
 
 ### 2016-08-08 ###
 ---
@@ -124,7 +122,7 @@ b 第二个service启动后，dubbogo/registry/zk:(zookeeperWatcher) watchDir()�
 ---
 - 1 经过2016-08-06#2的排查，查明了(rpcClient)call的poolConn.Close()&rpcStream.Close()两处close逻辑有冲突，做以下修改:
 
-     > a: 注释掉poolConn.Close处的代码;
+     a: 注释掉poolConn.Close处的代码;
      b: 给poolConn添加once成员，确保只释放一次;
      c: 注意将来添加长连接逻辑时候，此处相关逻辑可能还要修改;
      相关的error为：
