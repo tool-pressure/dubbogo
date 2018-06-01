@@ -95,14 +95,9 @@ func (w *zookeeperWatcher) watchServiceNode(zkPath string) bool {
 }
 
 func (w *zookeeperWatcher) handleZkNodeEvent(zkPath string, children []string, conf registry.ServiceConfig) {
-	var (
-		err         error
-		newChildren []string
-	)
-	newChildren, err = w.client.getChildren(zkPath)
+	newChildren, err := w.client.getChildren(zkPath)
 	if err != nil {
-		log.Error("path{%s} child nodes changed, zk.Children(path{%s} = error{%v}",
-			zkPath, zkPath, jerrors.ErrorStack(err))
+		log.Error("path{%s} child nodes changed, zk.Children() = error{%v}", zkPath, jerrors.ErrorStack(err))
 		return
 	}
 
