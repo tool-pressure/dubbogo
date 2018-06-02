@@ -16,6 +16,16 @@ a golang micro-service framework compatible with alibaba dubbo.
 * dubbogo 目前版本(0.2.0) 在上一个版本基础之上，codec层添加支持 hessian 2.0 协议，transport protocol 添加支持 tcp 协议 。
 * 目前只能在 client endpoint 层通过调用 tcp + hessian 与原生的 java dubbo server 间进行服务调用；
 
+
+
+TODO :
+
+* 添加心跳请求和处理；
+
+* 添加异步通信机制；
+
+  
+
 ## 0.1 说明 ##
 ---
 * dubbogo 目前版本(0.1.1)支持的codec 是jsonrpc 2.0，transport protocol是http；
