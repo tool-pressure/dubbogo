@@ -50,15 +50,15 @@ const (
 	FLAG_REQUEST = byte(0x80)
 	FLAG_TWOWAY  = byte(0x40)
 	FLAG_EVENT   = byte(0x20) // for heartbeat
-
-	SERIALIZATION_MASK = 0x1f
+	SERIAL_MASK  = 0x1f
 
 	DUBBO_VERSION = "2.5.4"
 	DEFAULT_LEN   = 8388608 // 8 * 1024 * 1024 default body max length
 )
 
 var (
-	DubboHeader = [HEADER_LENGTH]byte{MAGIC_HIGH, MAGIC_LOW, FLAG_REQUEST | FLAG_TWOWAY}
+	DubboHeader          = [HEADER_LENGTH]byte{MAGIC_HIGH, MAGIC_LOW, FLAG_REQUEST | FLAG_TWOWAY}
+	DubboHeartbeatHeader = [HEADER_LENGTH]byte{MAGIC_HIGH, MAGIC_LOW, FLAG_REQUEST | FLAG_TWOWAY | FLAG_EVENT | 0x0F}
 )
 
 // com.alibaba.dubbo.common.utils.ReflectUtils.ReflectUtils.java line245 getDesc
@@ -152,6 +152,7 @@ func getArgsTypeList(args []interface{}) (string, error) {
 func packRequest(m *codec.Message, a interface{}, w io.Writer) error {
 	var (
 		err           error
+		hb            bool
 		types         string
 		byteArray     []byte
 		encoder       Encoder
@@ -166,28 +167,29 @@ func packRequest(m *codec.Message, a interface{}, w io.Writer) error {
 		return jerrors.Errorf("@b is not of type: []interface{}")
 	}
 
+	hb = m.Type == codec.Heartbeat
+
 	//////////////////////////////////////////
 	// byteArray
 	//////////////////////////////////////////
 	// magic
-	byteArray = append(byteArray, DubboHeader[:]...)
+	if hb {
+		byteArray = append(byteArray, DubboHeartbeatHeader[:]...)
+	} else {
+		byteArray = append(byteArray, DubboHeader[:]...)
+	}
 	// serialization id, two way flag, event, request/response flag
 	// java 中标识一个class的ID
-	byteArray[2] |= byte(m.ID & SERIALIZATION_MASK)
+	byteArray[2] |= byte(m.ID & SERIAL_MASK)
 	// request id
 	binary.BigEndian.PutUint64(byteArray[4:], uint64(m.ID))
-	if m.Type == codec.Heartbeat {
-		byteArray[2] |= byte(FLAG_EVENT)
-	} else {
-		byteArray[2] |= byte(FLAG_REQUEST)
-	}
 	encoder.Append(byteArray[:HEADER_LENGTH])
 
 	// com.alibaba.dubbo.rpc.protocol.dubbo.DubboCodec.DubboCodec.java line144 encodeRequestData
 	//////////////////////////////////////////
 	// body
 	//////////////////////////////////////////
-	if m.Type == codec.Heartbeat {
+	if hb {
 		encoder.Encode(nil)
 		goto END
 	}

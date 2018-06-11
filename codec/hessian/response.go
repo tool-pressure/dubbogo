@@ -52,7 +52,7 @@ func unpackResponseHeaer(buf []byte, m *codec.Message) error {
 	}
 
 	// Header{serialization id(5 bit), event, two way, req/response}
-	serialID := buf[2] & SERIALIZATION_MASK
+	serialID := buf[2] & SERIAL_MASK
 	if serialID == byte(0x00) {
 		return jerrors.Errorf("serialization ID:%v", serialID)
 	}
