@@ -1,12 +1,19 @@
-/******************************************************
-# DESC    : invoke dubbogo.codec & dubbogo.transport to send app req & recv provider rsp
-# AUTHOR  : Alex Stocks
-# VERSION : 1.0
-# LICENCE : Apache Licence 2.0
-# EMAIL   : alexstocks@foxmail.com
-# MOD     : 2016-06-30 10:46
-# FILE    : rpc_stream.go
-******************************************************/
+// Copyright (c) 2015 Asim Aslam.
+// Copyright (c) 2016 ~ 2018, Alex Stocks.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
+// invoke dubbogo.codec & dubbogo.transport to send app req & recv provider rsp
 
 package client
 
@@ -96,8 +103,8 @@ func (r *rpcStream) Recv(msg interface{}) error {
 		return errShutdown
 	}
 
-	var resp response
-	if err := r.codec.ReadResponseHeader(&resp); err != nil {
+	var rsp response
+	if err := r.codec.ReadResponseHeader(&rsp); err != nil {
 		if err == io.EOF && !r.isClosed() {
 			r.err = io.ErrUnexpectedEOF
 			return io.ErrUnexpectedEOF
@@ -108,12 +115,12 @@ func (r *rpcStream) Recv(msg interface{}) error {
 	}
 
 	switch {
-	case len(resp.Error) > 0:
+	case len(rsp.Error) > 0:
 		// We've got an error response. Give this to the request;
 		// any subsequent requests will get the ReadResponseBody
 		// error if there is one.
-		if resp.Error != lastStreamResponseError {
-			r.err = serverError(resp.Error)
+		if rsp.Error != lastStreamResponseError {
+			r.err = serverError(rsp.Error)
 		} else {
 			r.err = io.EOF
 		}
