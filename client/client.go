@@ -78,10 +78,6 @@ var (
 	DefaultRetries = 1
 	// DefaultRequestTimeout is the default request timeout
 	DefaultRequestTimeout = time.Second * 5
-	// DefaultPoolSize sets the connection pool size
-	DefaultPoolSize = 0
-	// DefaultPoolTTL sets the connection pool ttl
-	DefaultPoolTTL = time.Minute
 
 	contentType2Codec = map[string]codec.NewCodec{
 		"application/json":    jsonrpc.NewCodec,

@@ -52,7 +52,6 @@ type rpcClient struct {
 	ID   int64
 	once sync.Once
 	opts Options
-	pool *pool
 
 	// gc goroutine
 	done chan empty
@@ -67,7 +66,6 @@ func newRPCClient(opt ...Option) Client {
 	rc := &rpcClient{
 		ID:   int64(uint32(t.Second() * t.Nanosecond() * common.Goid())),
 		opts: opts,
-		pool: newPool(opts.PoolSize, opts.PoolTTL),
 		done: make(chan empty),
 		gcCh: make(chan interface{}, CLEAN_CHANNEL_SIZE),
 	}
@@ -159,16 +157,13 @@ func (c *rpcClient) call(ctx context.Context, reqID int64, service registry.Serv
 		gerr  error
 		topts *transport.Options
 	)
-	conn, err := c.pool.getConn(
-		c.opts.CodecType.String(),
-		service.Location,
-		c.opts.Transport,
+	conn, err := c.opts.Transport.Dial(service.Location,
 		transport.WithTimeout(opts.DialTimeout),
-		transport.WithPath(service.Path),
-	)
+		transport.WithPath(service.Path))
 	if err != nil {
 		return common.InternalServerError("dubbogo.client", fmt.Sprintf("Error sending request: %v", err))
 	}
+	defer conn.Close()
 	topts = c.opts.Transport.Options()
 	topts.Addrs = append(topts.Addrs, service.Location)
 	topts.Timeout = reqTimeout
@@ -188,7 +183,6 @@ func (c *rpcClient) call(ctx context.Context, reqID int64, service registry.Serv
 			// 只缓存长连接
 			log.Debug("store connection:{protocol:%s, location:%s, conn:%#v}, gerr:%#v",
 				req.Protocol(), service.Location, conn, gerr)
-			c.pool.release(req.Protocol(), service.Location, conn, gerr)
 		}
 
 		c.gcCh <- stream

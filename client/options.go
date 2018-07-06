@@ -95,10 +95,6 @@ type Options struct {
 	Selector  selector.Selector
 	Transport transport.Transport
 
-	// Connection Pool
-	PoolSize int
-	PoolTTL  time.Duration
-
 	// Default Call Options
 	CallOptions CallOptions
 
@@ -114,8 +110,6 @@ func newOptions(options ...Option) Options {
 			RequestTimeout: DefaultRequestTimeout,
 			DialTimeout:    transport.DefaultDialTimeout,
 		},
-		PoolSize: DefaultPoolSize,
-		PoolTTL:  DefaultPoolTTL,
 	}
 
 	for _, o := range options {
@@ -144,20 +138,6 @@ func newOptions(options ...Option) Options {
 func CodecType(t codec.CodecType) Option {
 	return func(o *Options) {
 		o.CodecType = t
-	}
-}
-
-// PoolSize sets the connection pool size
-func PoolSize(d int) Option {
-	return func(o *Options) {
-		o.PoolSize = d
-	}
-}
-
-// PoolSize sets the connection pool size
-func PoolTTL(d time.Duration) Option {
-	return func(o *Options) {
-		o.PoolTTL = d
 	}
 }
 
