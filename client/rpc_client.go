@@ -42,6 +42,30 @@ const (
 )
 
 //////////////////////////////////////////////
+// RPC Request
+//////////////////////////////////////////////
+
+type rpcRequest struct {
+	group       string
+	protocol    string
+	version     string
+	service     string
+	method      string
+	args        interface{}
+	contentType string
+	opts        RequestOptions
+}
+
+func (r *rpcRequest) ServiceConfig() registry.ServiceConfigIf {
+	return &registry.ServiceConfig{
+		Protocol: r.protocol,
+		Service:  r.service,
+		Group:    r.group,
+		Version:  r.version,
+	}
+}
+
+//////////////////////////////////////////////
 // RPC Client
 //////////////////////////////////////////////
 
@@ -120,7 +144,11 @@ func (r *rpcClient) next(request Request, opts CallOptions) (selector.Next, erro
 // 7 通过一个error channel等待收发goroutine结束流程。
 // rpc client -> rpc stream -> rpc codec -> codec + transport
 func (c *rpcClient) call(ctx context.Context, reqID int64, service registry.ServiceURL,
-	req Request, rsp interface{}, opts CallOptions) error {
+	request Request, rsp interface{}, opts CallOptions) error {
+	req, ok := request.(*rpcRequest)
+	if !ok {
+		return jerrors.New(fmt.Sprintf("@request is not of type Request", request))
+	}
 
 	reqTimeout := opts.RequestTimeout
 	if len(service.Query.Get("timeout")) != 0 {
@@ -147,9 +175,9 @@ func (c *rpcClient) call(ctx context.Context, reqID int64, service registry.Serv
 			// set timeout in nanoseconds
 			pkg.Header["Timeout"] = fmt.Sprintf("%d", reqTimeout)
 			// set the content type for the request
-			pkg.Header["Content-Type"] = req.ContentType()
+			pkg.Header["Content-Type"] = req.protocol
 			// set the accept header
-			pkg.Header["Accept"] = req.ContentType()
+			pkg.Header["Accept"] = req.contentType
 		}
 	}
 
@@ -178,13 +206,6 @@ func (c *rpcClient) call(ctx context.Context, reqID int64, service registry.Serv
 	}
 
 	defer func() {
-		// defer execution of release
-		if req.Stream() {
-			// 只缓存长连接
-			log.Debug("store connection:{protocol:%s, location:%s, conn:%#v}, gerr:%#v",
-				req.Protocol(), service.Location, conn, gerr)
-		}
-
 		c.gcCh <- stream
 	}()
 
@@ -207,7 +228,7 @@ func (c *rpcClient) call(ctx context.Context, reqID int64, service registry.Serv
 		// 1 stream的send函数调用rpcStream.clientCodec.WriteRequest函数(从line 119可见clientCodec实际是newRPCCodec);
 		// 2 rpcCodec.WriteRequest调用了codec.Write(codec.Message, body)，在给request赋值后，然后又调用了transport.Send函数
 		// 3 httpTransportClient根据m{header, body}拼凑http.Request{header, body}，然后再调用http.Request.Write把请求以tcp协议的形式发送出去
-		if err = stream.Send(req.Args(), reqTimeout); err != nil {
+		if err = stream.Send(req.args, reqTimeout); err != nil {
 			ch <- err
 			return
 		}
@@ -234,6 +255,8 @@ func (c *rpcClient) call(ctx context.Context, reqID int64, service registry.Serv
 		gerr = ctx.Err()
 		return common.NewError("dubbogo.client", fmt.Sprintf("%v", ctx.Err()), 408)
 	}
+
+	return gerr
 }
 
 // 流程
@@ -337,7 +360,22 @@ func (c *rpcClient) NewRequest(group, version, service, method string, args inte
 	if dubbogoClientConfigMap[c.opts.CodecType].transportType == codec.TRANSPORT_TCP {
 		reqOpts = append(reqOpts, StreamingRequest())
 	}
-	return newRPCRequest(group, codecType, version, service, method, args, codec2ContentType[codecType], reqOpts...)
+
+	var opts RequestOptions
+	for _, o := range reqOpts {
+		o(&opts)
+	}
+
+	return &rpcRequest{
+		group:       group,
+		protocol:    codecType,
+		version:     version,
+		service:     service,
+		method:      method,
+		args:        args,
+		contentType: codec2ContentType[codecType],
+		opts:        opts,
+	}
 }
 
 func (c *rpcClient) String() string {

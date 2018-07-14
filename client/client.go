@@ -22,7 +22,6 @@ import (
 
 import (
 	"github.com/AlexStocks/dubbogo/codec"
-	"github.com/AlexStocks/dubbogo/codec/hessian"
 	"github.com/AlexStocks/dubbogo/codec/jsonrpc"
 	"github.com/AlexStocks/dubbogo/registry"
 	"github.com/AlexStocks/dubbogo/registry/zk"
@@ -42,17 +41,8 @@ type Client interface {
 	Close()
 }
 
-// Request is the interface for a synchronous request used by Call or Stream
 type Request interface {
-	Options() RequestOptions
-	Protocol() string
-	Version() string
-	Method() string
-	Args() interface{}
-	ContentType() string
 	ServiceConfig() registry.ServiceConfigIf
-	// indicates whether the request will be a streaming one rather than unary
-	Stream() bool
 }
 
 type (
@@ -82,12 +72,10 @@ var (
 	contentType2Codec = map[string]codec.NewCodec{
 		"application/json":    jsonrpc.NewCodec,
 		"application/jsonrpc": jsonrpc.NewCodec,
-		"application/dubbo":   hessian.NewCodec,
 	}
 
 	codec2ContentType = map[string]string{
 		"jsonrpc": "application/json",
-		"dubbo":   "application/dubbo",
 	}
 
 	dubbogoClientConfigMap = map[codec.CodecType]dubbogoClientConfig{
@@ -100,7 +88,6 @@ var (
 
 		codec.CODECTYPE_DUBBO: dubbogoClientConfig{
 			codecType:     codec.CODECTYPE_DUBBO,
-			newCodec:      hessian.NewCodec,
 			transportType: codec.TRANSPORT_TCP,
 			newTransport:  transport.NewTCPTransport,
 		},

@@ -41,7 +41,7 @@ type rpcStream struct {
 	closed     chan struct{}
 	err        error
 	serviceURL registry.ServiceURL
-	request    Request
+	request    *rpcRequest
 	codec      clientCodec
 	context    context.Context
 }
@@ -78,11 +78,11 @@ func (r *rpcStream) Send(args interface{}, timeout time.Duration) error {
 	r.Unlock()
 
 	req := request{
-		Version:       r.request.Version(),
+		Version:       r.request.version,
 		ServicePath:   strings.TrimPrefix(r.serviceURL.Path, "/"),
 		Service:       r.request.ServiceConfig().(*registry.ServiceConfig).Service,
 		Seq:           seq,
-		ServiceMethod: r.request.Method(),
+		ServiceMethod: r.request.method,
 		Timeout:       timeout,
 	}
 
