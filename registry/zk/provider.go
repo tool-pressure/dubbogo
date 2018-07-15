@@ -164,7 +164,7 @@ func (s *providerZookeeperRegistry) register(conf *registry.ProviderServiceConfi
 	// DubboRole               = [...]string{"consumer", "", "", "provider"}
 	// params.Add("category", (DubboType(PROVIDER)).Role())
 	params.Add("category", (DubboType(PROVIDER)).String())
-	params.Add("dubbo", "dubbo-provider-golang-"+version.Version)
+	params.Add("dubbo", "dubbogo-provider-"+version.Version)
 	params.Add("org", s.ApplicationConfig.Organization)
 	params.Add("module", s.ApplicationConfig.Module)
 	params.Add("owner", s.ApplicationConfig.Owner)

@@ -32,7 +32,6 @@ import (
 
 import (
 	"github.com/AlexStocks/dubbogo/codec"
-	"github.com/AlexStocks/dubbogo/transport"
 )
 
 const (
@@ -53,10 +52,10 @@ var (
 )
 
 type rpcCodec struct {
-	client transport.Client
+	client *httpClient
 	codec  codec.Codec
 
-	pkg *transport.Package
+	pkg *Package
 	buf *readWriteCloser
 }
 
@@ -102,7 +101,7 @@ func (rwc *readWriteCloser) Close() error {
 	return nil
 }
 
-func newRPCCodec(req *transport.Package, client transport.Client, c codec.NewCodec) *rpcCodec {
+func newRPCCodec(req *Package, client *httpClient, c codec.NewCodec) *rpcCodec {
 	rwc := &readWriteCloser{
 		wbuf: bytes.NewBuffer(nil),
 		rbuf: bytes.NewBuffer(nil),
@@ -146,7 +145,7 @@ func (c *rpcCodec) WriteRequest(req *request, args interface{}) error {
 func (c *rpcCodec) ReadResponseHeader(r *response) error {
 	var (
 		err error
-		p   transport.Package
+		p   Package
 		cm  codec.Message
 	)
 
@@ -175,7 +174,7 @@ func (c *rpcCodec) ReadResponseHeader(r *response) error {
 func (c *rpcCodec) ReadResponseBody(b interface{}) error {
 	var (
 		err error
-		p   transport.Package
+		p   Package
 	)
 
 	for {

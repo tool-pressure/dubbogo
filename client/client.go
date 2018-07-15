@@ -27,7 +27,6 @@ import (
 	"github.com/AlexStocks/dubbogo/registry/zk"
 	"github.com/AlexStocks/dubbogo/selector"
 	"github.com/AlexStocks/dubbogo/selector/cache"
-	"github.com/AlexStocks/dubbogo/transport"
 )
 
 // Client is the interface used to make requests to services.
@@ -59,7 +58,6 @@ type (
 		codecType     codec.CodecType
 		newCodec      codec.NewCodec
 		transportType codec.TransportType // transport type
-		newTransport  transport.NewTransport
 	}
 )
 
@@ -83,13 +81,11 @@ var (
 			codecType:     codec.CODECTYPE_JSONRPC,
 			newCodec:      jsonrpc.NewCodec,
 			transportType: codec.TRANSPORT_HTTP,
-			newTransport:  transport.NewHTTPTransport,
 		},
 
 		codec.CODECTYPE_DUBBO: dubbogoClientConfig{
 			codecType:     codec.CODECTYPE_DUBBO,
 			transportType: codec.TRANSPORT_TCP,
-			newTransport:  transport.NewTCPTransport,
 		},
 	}
 

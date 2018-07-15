@@ -34,7 +34,6 @@ import (
 	"github.com/AlexStocks/dubbogo/common"
 	"github.com/AlexStocks/dubbogo/registry"
 	"github.com/AlexStocks/dubbogo/selector"
-	"github.com/AlexStocks/dubbogo/transport"
 )
 
 const (
@@ -134,6 +133,18 @@ func (r *rpcClient) next(request Request, opts CallOptions) (selector.Next, erro
 	return r.opts.Selector.Select(request.ServiceConfig())
 }
 
+type transportPackage struct {
+	Header map[string]string
+	Body   []byte
+}
+
+func (m *transportPackage) Reset() {
+	m.Body = m.Body[:0]
+	for key := range m.Header {
+		delete(m.Header, key)
+	}
+}
+
 // 流程
 // 1 创建transport.Package 对象 pkg;
 // 2 设置msg.Header;
@@ -164,37 +175,27 @@ func (c *rpcClient) call(ctx context.Context, reqID int64, service registry.Serv
 	}
 
 	// 创建 transport package
-	pkg := &transport.Package{}
-	if c.opts.CodecType != codec.CODECTYPE_DUBBO {
-		pkg.Header = make(map[string]string)
-		if md, ok := ctx.Value(common.DUBBOGO_CTX_KEY).(map[string]string); ok {
-			for k := range md {
-				pkg.Header[k] = md[k]
-			}
-
-			// set timeout in nanoseconds
-			pkg.Header["Timeout"] = fmt.Sprintf("%d", reqTimeout)
-			// set the content type for the request
-			pkg.Header["Content-Type"] = req.protocol
-			// set the accept header
-			pkg.Header["Accept"] = req.contentType
+	pkg := &Package{}
+	pkg.Header = make(map[string]string)
+	if md, ok := ctx.Value(common.DUBBOGO_CTX_KEY).(map[string]string); ok {
+		for k := range md {
+			pkg.Header[k] = md[k]
 		}
+
+		// set timeout in nanoseconds
+		pkg.Header["Timeout"] = fmt.Sprintf("%d", reqTimeout)
+		// set the content type for the request
+		pkg.Header["Content-Type"] = req.protocol
+		// set the accept header
+		pkg.Header["Accept"] = req.contentType
 	}
 
-	var (
-		gerr  error
-		topts *transport.Options
-	)
-	conn, err := c.opts.Transport.Dial(service.Location,
-		transport.WithTimeout(opts.DialTimeout),
-		transport.WithPath(service.Path))
+	var gerr error
+	conn, err := initHTTPClient(service.Location, service.Path, opts.DialTimeout)
 	if err != nil {
-		return common.InternalServerError("dubbogo.client", fmt.Sprintf("Error sending request: %v", err))
+		return jerrors.Trace(err)
 	}
 	defer conn.Close()
-	topts = c.opts.Transport.Options()
-	topts.Addrs = append(topts.Addrs, service.Location)
-	topts.Timeout = reqTimeout
 
 	stream := &rpcStream{
 		seq:        reqID,

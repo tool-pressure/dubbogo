@@ -24,7 +24,6 @@ import (
 	"github.com/AlexStocks/dubbogo/codec"
 	"github.com/AlexStocks/dubbogo/registry"
 	"github.com/AlexStocks/dubbogo/selector"
-	"github.com/AlexStocks/dubbogo/transport"
 )
 
 //////////////////////////////////////////////
@@ -90,10 +89,9 @@ type Options struct {
 	CodecType codec.CodecType
 
 	// Plugged interfaces
-	newCodec  codec.NewCodec
-	Registry  registry.Registry
-	Selector  selector.Selector
-	Transport transport.Transport
+	newCodec codec.NewCodec
+	Registry registry.Registry
+	Selector selector.Selector
 
 	// Default Call Options
 	CallOptions CallOptions
@@ -108,7 +106,6 @@ func newOptions(options ...Option) Options {
 		CallOptions: CallOptions{
 			Retries:        DefaultRetries,
 			RequestTimeout: DefaultRequestTimeout,
-			DialTimeout:    transport.DefaultDialTimeout,
 		},
 	}
 
@@ -129,7 +126,6 @@ func newOptions(options ...Option) Options {
 	}
 
 	opts.newCodec = dubbogoClientConfigMap[opts.CodecType].newCodec
-	opts.Transport = dubbogoClientConfigMap[opts.CodecType].newTransport()
 
 	return opts
 }
@@ -145,13 +141,6 @@ func CodecType(t codec.CodecType) Option {
 func Registry(r registry.Registry) Option {
 	return func(o *Options) {
 		o.Registry = r
-	}
-}
-
-// Transport to use for communication e.g http, rabbitmq, etc
-func Transport(t transport.Transport) Option {
-	return func(o *Options) {
-		o.Transport = t
 	}
 }
 

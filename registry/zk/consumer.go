@@ -167,7 +167,7 @@ func (c *consumerZookeeperRegistry) register(conf *registry.ServiceConfig) error
 		params.Add("group", conf.Group)
 	}
 	params.Add("category", (DubboType(CONSUMER)).String())
-	params.Add("dubbo", "dubbo-consumer-golang-"+version.Version)
+	params.Add("dubbo", "dubbogo-consumer-"+version.Version)
 	params.Add("org", c.Organization)
 	params.Add("module", c.Module)
 	params.Add("owner", c.Owner)
