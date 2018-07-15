@@ -21,8 +21,6 @@ import (
 )
 
 import (
-	"github.com/AlexStocks/dubbogo/codec"
-	"github.com/AlexStocks/dubbogo/codec/jsonrpc"
 	"github.com/AlexStocks/dubbogo/registry"
 	"github.com/AlexStocks/dubbogo/registry/zk"
 	"github.com/AlexStocks/dubbogo/selector"
@@ -55,9 +53,8 @@ type (
 
 type (
 	dubbogoClientConfig struct {
-		codecType     codec.CodecType
-		newCodec      codec.NewCodec
-		transportType codec.TransportType // transport type
+		codecType CodecType
+		newCodec  NewCodec
 	}
 )
 
@@ -67,25 +64,19 @@ var (
 	// DefaultRequestTimeout is the default request timeout
 	DefaultRequestTimeout = time.Second * 5
 
-	contentType2Codec = map[string]codec.NewCodec{
-		"application/json":    jsonrpc.NewCodec,
-		"application/jsonrpc": jsonrpc.NewCodec,
+	contentType2Codec = map[string]NewCodec{
+		"application/json":    newJsonClientCodec,
+		"application/jsonrpc": newJsonClientCodec,
 	}
 
 	codec2ContentType = map[string]string{
 		"jsonrpc": "application/json",
 	}
 
-	dubbogoClientConfigMap = map[codec.CodecType]dubbogoClientConfig{
-		codec.CODECTYPE_JSONRPC: dubbogoClientConfig{
-			codecType:     codec.CODECTYPE_JSONRPC,
-			newCodec:      jsonrpc.NewCodec,
-			transportType: codec.TRANSPORT_HTTP,
-		},
-
-		codec.CODECTYPE_DUBBO: dubbogoClientConfig{
-			codecType:     codec.CODECTYPE_DUBBO,
-			transportType: codec.TRANSPORT_TCP,
+	dubbogoClientConfigMap = map[CodecType]dubbogoClientConfig{
+		CODECTYPE_JSONRPC: dubbogoClientConfig{
+			codecType: CODECTYPE_JSONRPC,
+			newCodec:  newJsonClientCodec,
 		},
 	}
 

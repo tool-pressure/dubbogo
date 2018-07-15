@@ -12,13 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package jsonrpc
+package client
 
 import (
 	"encoding/json"
+	"fmt"
 	"io"
 	"reflect"
 	"sync"
+	"time"
 )
 
 import (
@@ -26,16 +28,101 @@ import (
 	jerrors "github.com/juju/errors"
 )
 
-import (
-	"github.com/AlexStocks/dubbogo/codec"
-)
-
 const (
 	MAX_JSONRPC_ID = 0x7FFFFFFF
 	VERSION        = "2.0"
 )
 
-type clientCodec struct {
+//////////////////////////////////////////
+// codec type
+//////////////////////////////////////////
+
+type CodecType int
+
+const (
+	CODECTYPE_UNKNOWN CodecType = iota
+	CODECTYPE_JSONRPC
+)
+
+var codecTypeStrings = [...]string{
+	"unknown",
+	"jsonrpc",
+}
+
+func (c CodecType) String() string {
+	typ := CODECTYPE_UNKNOWN
+	switch c {
+	case CODECTYPE_JSONRPC:
+		typ = c
+	}
+
+	return codecTypeStrings[typ]
+}
+
+func GetCodecType(t string) CodecType {
+	var typ = CODECTYPE_UNKNOWN
+
+	switch t {
+	case codecTypeStrings[CODECTYPE_JSONRPC]:
+		typ = CODECTYPE_JSONRPC
+	}
+
+	return typ
+}
+
+type Codec interface {
+	ReadHeader(*Message) error
+	ReadBody(interface{}) error
+	Write(m *Message, args interface{}) error
+	Close() error
+}
+
+type NewCodec func(io.ReadWriteCloser) Codec
+
+type Message struct {
+	ID          int64
+	Version     string
+	ServicePath string // service path
+	Target      string // Service
+	Method      string
+	Timeout     time.Duration // request timeout
+	Error       string
+	Header      map[string]string
+	BodyLen     int
+}
+
+var (
+	// Actual returned error may have different message.
+	errInternal    = NewError(-32603, "Internal error")
+	errServerError = NewError(-32001, "jsonrpc2.Error: json.Marshal failed")
+)
+
+// Error represent JSON-RPC 2.0 "Error object".
+type Error struct {
+	Code    int         `json:"code"`
+	Message string      `json:"message"`
+	Data    interface{} `json:"data,omitempty"`
+}
+
+// NewError returns an Error with given code and message.
+func NewError(code int, message string) *Error {
+	return &Error{Code: code, Message: message}
+}
+
+// Error returns JSON representation of Error.
+func (e *Error) Error() string {
+	buf, err := json.Marshal(e)
+	if err != nil {
+		msg, err := json.Marshal(err.Error())
+		if err != nil {
+			msg = []byte(`"` + errServerError.Message + `"`)
+		}
+		return fmt.Sprintf(`{"code":%d,"message":%s}`, errServerError.Code, string(msg))
+	}
+	return string(buf)
+}
+
+type jsonClientCodec struct {
 	dec *json.Decoder // for reading JSON values
 	enc *json.Encoder // for writing JSON values
 	c   io.Closer
@@ -69,8 +156,8 @@ func (r *clientResponse) reset() {
 	r.Error = nil
 }
 
-func newClientCodec(conn io.ReadWriteCloser) *clientCodec {
-	return &clientCodec{
+func newJsonClientCodec(conn io.ReadWriteCloser) Codec {
+	return &jsonClientCodec{
 		dec:     json.NewDecoder(conn),
 		enc:     json.NewEncoder(conn),
 		c:       conn,
@@ -78,7 +165,7 @@ func newClientCodec(conn io.ReadWriteCloser) *clientCodec {
 	}
 }
 
-func (c *clientCodec) Write(m *codec.Message, param interface{}) error {
+func (c *jsonClientCodec) Write(m *Message, param interface{}) error {
 	// If return error: it will be returned as is for this call.
 	// Allow param to be only Array, Slice, Map or Struct.
 	// When param is nil or uninitialized Map or Slice - omit "params".
@@ -129,7 +216,7 @@ func (c *clientCodec) Write(m *codec.Message, param interface{}) error {
 	return c.enc.Encode(&c.req)
 }
 
-func (c *clientCodec) ReadHeader(m *codec.Message) error {
+func (c *jsonClientCodec) ReadHeader(m *Message) error {
 	c.resp.reset()
 	if err := c.dec.Decode(&c.resp); err != nil {
 		if err == io.EOF {
@@ -146,7 +233,7 @@ func (c *clientCodec) ReadHeader(m *codec.Message) error {
 	if !ok {
 		c.Unlock()
 		err := jerrors.Errorf("can not find method of response id %v, response error:%v", c.resp.ID, c.resp.Error)
-		log.Debug("clientCodec.ReadHeader(@m{%v}) = error{%v}", m, err)
+		log.Debug("jsonClientCodec.ReadHeader(@m{%v}) = error{%v}", m, err)
 		return err
 	}
 	delete(c.pending, c.resp.ID)
@@ -161,13 +248,14 @@ func (c *clientCodec) ReadHeader(m *codec.Message) error {
 	return nil
 }
 
-func (c *clientCodec) ReadBody(x interface{}) error {
+func (c *jsonClientCodec) ReadBody(x interface{}) error {
 	if x == nil || c.resp.Result == nil {
 		return nil
 	}
-	return json.Unmarshal(*c.resp.Result, x)
+
+	return jerrors.Trace(json.Unmarshal(*c.resp.Result, x))
 }
 
-func (c *clientCodec) Close() error {
-	return c.c.Close()
+func (c *jsonClientCodec) Close() error {
+	return jerrors.Trace(c.c.Close())
 }

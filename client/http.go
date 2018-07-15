@@ -3,7 +3,6 @@ package client
 import (
 	"bufio"
 	"bytes"
-	"context"
 	"io"
 	"io/ioutil"
 	"net"
@@ -19,7 +18,6 @@ import (
 
 import (
 	"github.com/AlexStocks/dubbogo/common"
-	"github.com/AlexStocks/goext/log"
 )
 
 const (
@@ -38,9 +36,9 @@ func (m *Package) Reset() {
 	}
 }
 
-var (
-	DefaultDialTimeout = time.Second * 5
-)
+//////////////////////////////////////////////
+// http transport client
+//////////////////////////////////////////////
 
 type buffer struct {
 	io.ReadWriter
@@ -48,20 +46,6 @@ type buffer struct {
 
 func (b *buffer) Close() error {
 	return nil
-}
-
-//////////////////////////////////////////////
-// http transport client
-//////////////////////////////////////////////
-
-type DialOptions struct {
-	Stream  bool
-	Timeout time.Duration
-	Path    string
-
-	// Other options for implementations of the interface
-	// can be stored in a context
-	Context context.Context
 }
 
 type httpClient struct {
@@ -84,7 +68,6 @@ func initHTTPClient(
 ) (*httpClient, error) {
 
 	tcpConn, err := net.DialTimeout("tcp", addr, timeout)
-	gxlog.CError("addr:%s, tcpConn:%#v, err:%s", addr, tcpConn, err)
 	if err != nil {
 		return nil, jerrors.Trace(err)
 	}

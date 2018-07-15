@@ -21,7 +21,6 @@ import (
 )
 
 import (
-	"github.com/AlexStocks/dubbogo/codec"
 	"github.com/AlexStocks/dubbogo/registry"
 	"github.com/AlexStocks/dubbogo/selector"
 )
@@ -85,13 +84,11 @@ func WithRequestTimeout(d time.Duration) CallOption {
 //////////////////////////////////////////////
 
 type Options struct {
-	// Used to select codec
-	CodecType codec.CodecType
-
 	// Plugged interfaces
-	newCodec codec.NewCodec
-	Registry registry.Registry
-	Selector selector.Selector
+	CodecType CodecType
+	newCodec  NewCodec
+	Registry  registry.Registry
+	Selector  selector.Selector
 
 	// Default Call Options
 	CallOptions CallOptions
@@ -131,7 +128,7 @@ func newOptions(options ...Option) Options {
 }
 
 // Default content type of the client
-func CodecType(t codec.CodecType) Option {
+func ClientCodecType(t CodecType) Option {
 	return func(o *Options) {
 		o.CodecType = t
 	}

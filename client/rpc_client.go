@@ -30,7 +30,6 @@ import (
 )
 
 import (
-	"github.com/AlexStocks/dubbogo/codec"
 	"github.com/AlexStocks/dubbogo/common"
 	"github.com/AlexStocks/dubbogo/registry"
 	"github.com/AlexStocks/dubbogo/selector"
@@ -133,18 +132,6 @@ func (r *rpcClient) next(request Request, opts CallOptions) (selector.Next, erro
 	return r.opts.Selector.Select(request.ServiceConfig())
 }
 
-type transportPackage struct {
-	Header map[string]string
-	Body   []byte
-}
-
-func (m *transportPackage) Reset() {
-	m.Body = m.Body[:0]
-	for key := range m.Header {
-		delete(m.Header, key)
-	}
-}
-
 // 流程
 // 1 创建transport.Package 对象 pkg;
 // 2 设置msg.Header;
@@ -174,7 +161,7 @@ func (c *rpcClient) call(ctx context.Context, reqID int64, service registry.Serv
 		reqTimeout = DefaultRequestTimeout
 	}
 
-	// 创建 transport package
+	// create client package
 	pkg := &Package{}
 	pkg.Header = make(map[string]string)
 	if md, ok := ctx.Value(common.DUBBOGO_CTX_KEY).(map[string]string); ok {
@@ -358,9 +345,6 @@ func (c *rpcClient) Options() Options {
 
 func (c *rpcClient) NewRequest(group, version, service, method string, args interface{}, reqOpts ...RequestOption) Request {
 	codecType := c.opts.CodecType.String()
-	if dubbogoClientConfigMap[c.opts.CodecType].transportType == codec.TRANSPORT_TCP {
-		reqOpts = append(reqOpts, StreamingRequest())
-	}
 
 	var opts RequestOptions
 	for _, o := range reqOpts {

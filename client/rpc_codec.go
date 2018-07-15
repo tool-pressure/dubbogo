@@ -1,23 +1,3 @@
-// Copyright (c) 2015 Asim Aslam.
-// Copyright (c) 2016 ~ 2018, Alex Stocks.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-//
-// provide interface for rpc_steam;
-// encode app packet into byte stream by codec and send them
-// to server by transport, and then receive rsp stream and
-// decode them into app package.
-
 package client
 
 import (
@@ -28,10 +8,6 @@ import (
 
 import (
 	jerrors "github.com/juju/errors"
-)
-
-import (
-	"github.com/AlexStocks/dubbogo/codec"
 )
 
 const (
@@ -53,10 +29,9 @@ var (
 
 type rpcCodec struct {
 	client *httpClient
-	codec  codec.Codec
-
-	pkg *Package
-	buf *readWriteCloser
+	codec  Codec
+	pkg    *Package
+	buf    *readWriteCloser
 }
 
 type readWriteCloser struct {
@@ -101,7 +76,7 @@ func (rwc *readWriteCloser) Close() error {
 	return nil
 }
 
-func newRPCCodec(req *Package, client *httpClient, c codec.NewCodec) *rpcCodec {
+func newRPCCodec(req *Package, client *httpClient, newCodec NewCodec) *rpcCodec {
 	rwc := &readWriteCloser{
 		wbuf: bytes.NewBuffer(nil),
 		rbuf: bytes.NewBuffer(nil),
@@ -110,21 +85,20 @@ func newRPCCodec(req *Package, client *httpClient, c codec.NewCodec) *rpcCodec {
 	return &rpcCodec{
 		buf:    rwc,
 		client: client,
-		codec:  c(rwc),
+		codec:  newCodec(rwc),
 		pkg:    req,
 	}
 }
 
 func (c *rpcCodec) WriteRequest(req *request, args interface{}) error {
 	c.buf.wbuf.Reset()
-	m := &codec.Message{
+	m := &Message{
 		ID:          req.Seq,
 		Version:     req.Version,
 		ServicePath: req.ServicePath,
 		Target:      req.Service,
 		Method:      req.ServiceMethod,
 		Timeout:     req.Timeout,
-		Type:        codec.Request,
 		Header:      map[string]string{},
 	}
 	// Serialization
@@ -146,23 +120,16 @@ func (c *rpcCodec) ReadResponseHeader(r *response) error {
 	var (
 		err error
 		p   Package
-		cm  codec.Message
+		cm  Message
 	)
 
 	c.buf.rbuf.Reset()
-
-	for {
-		p.Reset()
-		err = c.client.Recv(&p)
-		if err != nil {
-			return jerrors.Trace(err)
-		}
-		c.buf.rbuf.Write(p.Body)
-		err = c.codec.ReadHeader(&cm, codec.Response)
-		if err != codec.ErrHeaderNotEnough {
-			break
-		}
+	err = c.client.Recv(&p)
+	if err != nil {
+		return jerrors.Trace(err)
 	}
+	c.buf.rbuf.Write(p.Body)
+	err = c.codec.ReadHeader(&cm)
 
 	r.ServiceMethod = cm.Method
 	r.Seq = cm.ID
@@ -172,25 +139,7 @@ func (c *rpcCodec) ReadResponseHeader(r *response) error {
 }
 
 func (c *rpcCodec) ReadResponseBody(b interface{}) error {
-	var (
-		err error
-		p   Package
-	)
-
-	for {
-		err = c.codec.ReadBody(b)
-		if err != codec.ErrBodyNotEnough {
-			return jerrors.Trace(err)
-		}
-		p.Reset()
-		err = c.client.Recv(&p)
-		if err != nil {
-			return jerrors.Trace(err)
-		}
-		c.buf.rbuf.Write(p.Body)
-	}
-
-	return nil
+	return jerrors.Trace(c.codec.ReadBody(b))
 }
 
 func (c *rpcCodec) Close() error {
