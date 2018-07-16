@@ -73,7 +73,7 @@ func GetCodecType(t string) CodecType {
 type Codec interface {
 	ReadHeader(*Message) error
 	ReadBody(interface{}) error
-	Write(m *Message, args interface{}) error
+	Write(m *Message) error
 	Close() error
 }
 
@@ -86,9 +86,10 @@ type Message struct {
 	Target      string // Service
 	Method      string
 	Timeout     time.Duration // request timeout
-	Error       string
 	Header      map[string]string
+	Args        interface{}
 	BodyLen     int
+	Error       string
 }
 
 var (
@@ -165,10 +166,11 @@ func newJsonClientCodec(conn io.ReadWriteCloser) Codec {
 	}
 }
 
-func (c *jsonClientCodec) Write(m *Message, param interface{}) error {
+func (c *jsonClientCodec) Write(m *Message) error {
 	// If return error: it will be returned as is for this call.
 	// Allow param to be only Array, Slice, Map or Struct.
 	// When param is nil or uninitialized Map or Slice - omit "params".
+	param := m.Args
 	if param != nil {
 		switch k := reflect.TypeOf(param).Kind(); k {
 		case reflect.Map:

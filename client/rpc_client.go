@@ -167,8 +167,9 @@ func (c *rpcClient) call(ctx context.Context, reqID int64, service registry.Serv
 			Method:      req.method,
 			Timeout:     reqTimeout,
 			Header:      map[string]string{},
+			Args:        req.args,
 		}
-		if err = conn.WriteRequest(msg, req.args); err != nil {
+		if err = conn.WriteRequest(&msg); err != nil {
 			ch <- err
 			return
 		}

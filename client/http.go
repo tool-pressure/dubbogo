@@ -21,11 +21,6 @@ const (
 	lastStreamResponseError = "EOS"
 )
 
-// errShutdown holds the specific error for closing/closed connections
-var (
-	errShutdown = jerrors.New("connection is shut down")
-)
-
 type readWriteCloser struct {
 	wbuf *bytes.Buffer
 	rbuf *bytes.Buffer
@@ -83,17 +78,15 @@ type httpClient struct {
 	addr    string
 	path    string
 	timeout time.Duration
-	once    sync.Once
 
 	sync.Mutex
 	r    chan *http.Request
 	bl   []*http.Request
 	buff *bufio.Reader
 
-	codec  Codec
-	pkg    *Package
-	buf    *readWriteCloser
-	closed chan empty
+	codec Codec
+	pkg   *Package
+	buf   *readWriteCloser
 }
 
 func initHTTPClient(
@@ -122,36 +115,19 @@ func initHTTPClient(
 		buff:    bufio.NewReader(tcpConn),
 		r:       make(chan *http.Request, 1),
 
-		buf:    rwc,
-		codec:  newCodec(rwc),
-		pkg:    pkg,
-		closed: make(chan empty),
+		buf:   rwc,
+		codec: newCodec(rwc),
+		pkg:   pkg,
 	}, nil
 }
 
-func (h *httpClient) isClosed() bool {
-	select {
-	case <-h.closed:
-		return true
-	default:
-		return false
-	}
-}
-
-func (h *httpClient) WriteRequest(msg Message, args interface{}) error {
-	if h.isClosed() {
-		return errShutdown
-	}
-
+func (h *httpClient) WriteRequest(msg *Message) error {
 	h.buf.wbuf.Reset()
 
-	// Serialization
-	if err := h.codec.Write(&msg, args); err != nil {
+	if err := h.codec.Write(msg); err != nil {
 		return jerrors.Trace(err)
 	}
-	// get binary stream
 	h.pkg.Body = h.buf.wbuf.Bytes()
-	// tcp 层不使用 transport.Package.Header, codec.Write 调用之后其所有内容已经序列化进 transport.Package.Body
 	if h.pkg.Header != nil {
 		for k, v := range msg.Header {
 			h.pkg.Header[k] = v
@@ -268,10 +244,6 @@ func (h *httpClient) ReadResponseHeader(msg *Message) error {
 		p   Package
 	)
 
-	if h.isClosed() {
-		return errShutdown
-	}
-
 	h.buf.rbuf.Reset()
 	err = h.Recv(&p)
 	if err != nil {
@@ -282,31 +254,16 @@ func (h *httpClient) ReadResponseHeader(msg *Message) error {
 }
 
 func (h *httpClient) ReadResponseBody(b interface{}) error {
-	if h.isClosed() {
-		return errShutdown
-	}
-
 	return jerrors.Trace(h.codec.ReadBody(b))
 }
 
 func (h *httpClient) Close() error {
-	var err error
-
-	select {
-	case <-h.closed:
-		return nil
-	default:
-		h.buf.Close()
-		h.codec.Close()
-		h.once.Do(func() {
-			h.Lock()
-			h.buff.Reset(nil)
-			h.buff = nil
-			h.Unlock()
-			close(h.r)
-			err = h.conn.Close()
-		})
-	}
-
-	return jerrors.Trace(err)
+	h.buf.Close()
+	h.codec.Close()
+	h.Lock()
+	h.buff.Reset(nil)
+	h.buff = nil
+	h.Unlock()
+	close(h.r)
+	return jerrors.Trace(h.conn.Close())
 }
