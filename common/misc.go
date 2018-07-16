@@ -1,4 +1,3 @@
-// Copyright (c) 2015 Asim Aslam.
 // Copyright (c) 2016 ~ 2018, Alex Stocks.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");

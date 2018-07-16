@@ -32,6 +32,7 @@ type rpcCodec struct {
 	codec  Codec
 	pkg    *Package
 	buf    *readWriteCloser
+	closed chan empty
 }
 
 type readWriteCloser struct {
@@ -87,10 +88,24 @@ func newRPCCodec(req *Package, client *httpClient, newCodec NewCodec) *rpcCodec 
 		client: client,
 		codec:  newCodec(rwc),
 		pkg:    req,
+		closed: make(chan empty),
+	}
+}
+
+func (c *rpcCodec) isClosed() bool {
+	select {
+	case <-c.closed:
+		return true
+	default:
+		return false
 	}
 }
 
 func (c *rpcCodec) WriteRequest(req *request, args interface{}) error {
+	if c.isClosed() {
+		return errShutdown
+	}
+
 	c.buf.wbuf.Reset()
 	m := &Message{
 		ID:          req.Seq,
@@ -123,6 +138,10 @@ func (c *rpcCodec) ReadResponseHeader(r *response) error {
 		cm  Message
 	)
 
+	if c.isClosed() {
+		return errShutdown
+	}
+
 	c.buf.rbuf.Reset()
 	err = c.client.Recv(&p)
 	if err != nil {
@@ -139,11 +158,20 @@ func (c *rpcCodec) ReadResponseHeader(r *response) error {
 }
 
 func (c *rpcCodec) ReadResponseBody(b interface{}) error {
+	if c.isClosed() {
+		return errShutdown
+	}
+
 	return jerrors.Trace(c.codec.ReadBody(b))
 }
 
 func (c *rpcCodec) Close() error {
-	c.buf.Close()
-	c.codec.Close()
-	return c.client.Close()
+	select {
+	case <-c.closed:
+		return nil
+	default:
+		c.buf.Close()
+		c.codec.Close()
+		return c.client.Close()
+	}
 }

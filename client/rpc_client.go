@@ -33,6 +33,8 @@ import (
 	"github.com/AlexStocks/dubbogo/common"
 	"github.com/AlexStocks/dubbogo/registry"
 	"github.com/AlexStocks/dubbogo/selector"
+	"io"
+	"strings"
 )
 
 const (
@@ -100,10 +102,6 @@ func newRPCClient(opt ...Option) Client {
 
 // rpcClient garbage collector
 func (c *rpcClient) gc() {
-	var (
-		obj interface{}
-	)
-
 	defer c.wg.Done()
 LOOP:
 	for {
@@ -111,10 +109,10 @@ LOOP:
 		case <-c.done:
 			log.Info("(rpcClient)gc goroutine exit now ...")
 			break LOOP
-		case obj = <-c.gcCh:
+		case obj := <-c.gcCh:
 			switch obj.(type) {
-			case *rpcStream:
-				obj.(*rpcStream).Close() // stream.Close()->rpcCodec.Close->poolConn.Close->httpTransportClient.Close
+			case *rpcCodec:
+				obj.(*rpcCodec).Close() // rpcCodec.Close->httpClient.Close
 			default:
 				log.Warn("illegal type of gc obj:%+v", obj)
 			}
@@ -132,20 +130,11 @@ func (r *rpcClient) next(request Request, opts CallOptions) (selector.Next, erro
 	return r.opts.Selector.Select(request.ServiceConfig())
 }
 
-// 流程
-// 1 创建transport.Package 对象 pkg;
-// 2 设置msg.Header;
-// 3 创建codec对象;
-// 4 从连接池中获取一个连接conn;
-// 5 创建stream对象;
-// 6 启动一个收发goroutine, 调用stream完成网络收发;
-// 7 通过一个error channel等待收发goroutine结束流程。
-// rpc client -> rpc stream -> rpc codec -> codec + transport
 func (c *rpcClient) call(ctx context.Context, reqID int64, service registry.ServiceURL,
-	request Request, rsp interface{}, opts CallOptions) error {
-	req, ok := request.(*rpcRequest)
+	cltRequest Request, rsp interface{}, opts CallOptions) error {
+	req, ok := cltRequest.(*rpcRequest)
 	if !ok {
-		return jerrors.New(fmt.Sprintf("@request is not of type Request", request))
+		return jerrors.New(fmt.Sprintf("@request is not of type Request", cltRequest))
 	}
 
 	reqTimeout := opts.RequestTimeout
@@ -184,55 +173,62 @@ func (c *rpcClient) call(ctx context.Context, reqID int64, service registry.Serv
 	}
 	defer conn.Close()
 
-	stream := &rpcStream{
-		seq:        reqID,
-		context:    ctx,
-		serviceURL: service,
-		request:    req,
-		closed:     make(chan struct{}),
-		codec:      newRPCCodec(pkg, conn, c.opts.newCodec),
-	}
-
+	codec := newRPCCodec(pkg, conn, c.opts.newCodec)
 	defer func() {
-		c.gcCh <- stream
+		c.gcCh <- codec
 	}()
 
 	ch := make(chan error, 1)
 	go func() {
 		var (
 			err error
+			rsp response
 		)
 		defer func() {
 			if panicMsg := recover(); panicMsg != nil {
 				if msg, ok := panicMsg.(string); ok {
-					ch <- jerrors.New(strconv.Itoa(int(stream.seq)) + " request error, panic msg:" + msg)
+					ch <- jerrors.New(strconv.Itoa(int(reqID)) + " request error, panic msg:" + msg)
 				} else {
 					ch <- jerrors.New("request error")
 				}
 			}
 		}()
 
-		// send request
-		// 1 stream的send函数调用rpcStream.clientCodec.WriteRequest函数(从line 119可见clientCodec实际是newRPCCodec);
-		// 2 rpcCodec.WriteRequest调用了codec.Write(codec.Message, body)，在给request赋值后，然后又调用了transport.Send函数
-		// 3 httpTransportClient根据m{header, body}拼凑http.Request{header, body}，然后再调用http.Request.Write把请求以tcp协议的形式发送出去
-		if err = stream.Send(req.args, reqTimeout); err != nil {
+		rpcReq := request{
+			Version:       req.version,
+			ServicePath:   strings.TrimPrefix(service.Path, "/"),
+			Service:       req.ServiceConfig().(*registry.ServiceConfig).Service,
+			Seq:           reqID,
+			ServiceMethod: req.method,
+			Timeout:       reqTimeout,
+		}
+		if err = codec.WriteRequest(&rpcReq, req.args); err != nil {
 			ch <- err
 			return
 		}
 
-		// recv response
-		// 1 stream.Recv 调用rpcPlusCodec.ReadResponseHeader & rpcCodec.ReadResponseBody;
-		// 2 rpcCodec.ReadResponseHeader 先调用httpTransportClient.read，然后再调用codec.ReadHeader
-		// 3 rpcCodec.ReadResponseBody 调用codec.ReadBody
-		if err = stream.Recv(rsp); err != nil {
-			log.Warn("stream.Recv(ID{%d}, req{%#v}, rsp{%#v}) = err{%t}", reqID, req, rsp, err)
+		if err = codec.ReadResponseHeader(&rsp); err != nil {
+			log.Warn("codec.ReadResponseHeader(ID{%d}, req{%#v}, rsp{%#v}) = err{%t}", reqID, req, rsp, err)
 			ch <- err
 			return
 		}
+		err = nil
+		switch {
+		case len(rsp.Error) > 0:
+			if rsp.Error == lastStreamResponseError {
+				err = io.EOF
+			} else {
+				err = jerrors.New(rsp.Error)
+			}
+			if e := codec.ReadResponseBody(nil); e != nil {
+				err = e
+			}
 
-		// success
-		ch <- nil
+		default:
+			err = codec.ReadResponseBody(rsp)
+		}
+
+		ch <- err
 	}()
 
 	select {
@@ -247,12 +243,6 @@ func (c *rpcClient) call(ctx context.Context, reqID int64, service registry.Serv
 	return gerr
 }
 
-// 流程
-// 1 从selector中根据service选择一个provider，具体的来说，就是next函数对象;
-// 2 构造call函数;
-//   2.1 调用next函数返回provider的serviceurl;
-//   2.2 调用rpcClient.call()
-// 3 根据重试次数的设定，循环调用call，直到有一次成功或者重试
 func (c *rpcClient) Call(ctx context.Context, request Request, response interface{}, opts ...CallOption) error {
 	reqID := atomic.AddInt64(&c.ID, 1)
 	// make a copy of call opts
