@@ -18,7 +18,9 @@ package client
 import (
 	"context"
 	"fmt"
+	"io"
 	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -33,8 +35,6 @@ import (
 	"github.com/AlexStocks/dubbogo/common"
 	"github.com/AlexStocks/dubbogo/registry"
 	"github.com/AlexStocks/dubbogo/selector"
-	"io"
-	"strings"
 )
 
 const (
@@ -166,7 +166,6 @@ func (c *rpcClient) call(ctx context.Context, reqID int64, service registry.Serv
 		pkg.Header["Accept"] = req.contentType
 	}
 
-	var gerr error
 	conn, err := initHTTPClient(service.Location, service.Path, opts.DialTimeout)
 	if err != nil {
 		return jerrors.Trace(err)
@@ -181,8 +180,8 @@ func (c *rpcClient) call(ctx context.Context, reqID int64, service registry.Serv
 	ch := make(chan error, 1)
 	go func() {
 		var (
-			err error
-			rsp response
+			err    error
+			rpcRsp response
 		)
 		defer func() {
 			if panicMsg := recover(); panicMsg != nil {
@@ -207,18 +206,18 @@ func (c *rpcClient) call(ctx context.Context, reqID int64, service registry.Serv
 			return
 		}
 
-		if err = codec.ReadResponseHeader(&rsp); err != nil {
-			log.Warn("codec.ReadResponseHeader(ID{%d}, req{%#v}, rsp{%#v}) = err{%t}", reqID, req, rsp, err)
+		if err = codec.ReadResponseHeader(&rpcRsp); err != nil {
+			log.Warn("codec.ReadResponseHeader(ID{%d}, req{%#v}, rsp{%#v}) = err{%t}", reqID, req, rpcRsp, err)
 			ch <- err
 			return
 		}
 		err = nil
 		switch {
-		case len(rsp.Error) > 0:
-			if rsp.Error == lastStreamResponseError {
+		case len(rpcRsp.Error) > 0:
+			if rpcRsp.Error == lastStreamResponseError {
 				err = io.EOF
 			} else {
-				err = jerrors.New(rsp.Error)
+				err = jerrors.New(rpcRsp.Error)
 			}
 			if e := codec.ReadResponseBody(nil); e != nil {
 				err = e
@@ -233,14 +232,12 @@ func (c *rpcClient) call(ctx context.Context, reqID int64, service registry.Serv
 
 	select {
 	case err := <-ch:
-		gerr = err
 		return jerrors.Trace(err)
 	case <-ctx.Done():
-		gerr = ctx.Err()
 		return jerrors.Trace(ctx.Err())
 	}
 
-	return gerr
+	return nil
 }
 
 func (c *rpcClient) Call(ctx context.Context, request Request, response interface{}, opts ...CallOption) error {
