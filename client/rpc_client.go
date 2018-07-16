@@ -205,9 +205,9 @@ func (c *rpcClient) call(ctx context.Context, reqID int64, service registry.Serv
 		defer func() {
 			if panicMsg := recover(); panicMsg != nil {
 				if msg, ok := panicMsg.(string); ok {
-					ch <- common.InternalServerError("dubbogo.client", strconv.Itoa(int(stream.seq))+" request error, panic msg:"+msg)
+					ch <- jerrors.New(strconv.Itoa(int(stream.seq)) + " request error, panic msg:" + msg)
 				} else {
-					ch <- common.InternalServerError("dubbogo.client", "request error")
+					ch <- jerrors.New("request error")
 				}
 			}
 		}()
@@ -241,7 +241,7 @@ func (c *rpcClient) call(ctx context.Context, reqID int64, service registry.Serv
 		return jerrors.Trace(err)
 	case <-ctx.Done():
 		gerr = ctx.Err()
-		return common.NewError("dubbogo.client", fmt.Sprintf("%v", ctx.Err()), 408)
+		return jerrors.Trace(ctx.Err())
 	}
 
 	return gerr
@@ -265,11 +265,7 @@ func (c *rpcClient) Call(ctx context.Context, request Request, response interfac
 	next, err := c.next(request, callOpts)
 	if err != nil {
 		log.Error("selector.Select(request{%#v}) = error{%#v}", request, err)
-		if err == selector.ErrNotFound {
-			return common.NotFound("dubbogo.client", err.Error())
-		}
-
-		return common.InternalServerError("dubbogo.client", err.Error())
+		return jerrors.Trace(err)
 	}
 
 	// check if we already have a deadline
@@ -289,7 +285,7 @@ func (c *rpcClient) Call(ctx context.Context, request Request, response interfac
 
 	select {
 	case <-ctx.Done():
-		return common.NewError("dubbogo.client", fmt.Sprintf("%v", ctx.Err()), 408)
+		return jerrors.Trace(ctx.Err())
 	default:
 	}
 
@@ -298,11 +294,7 @@ func (c *rpcClient) Call(ctx context.Context, request Request, response interfac
 		serviceURL, err := next(reqID)
 		if err != nil {
 			log.Error("selector.next(request{%#v}, reqID{%d}) = error{%#v}", request, reqID, err)
-			if err == selector.ErrNotFound {
-				return common.NotFound("dubbogo.client", err.Error())
-			}
-
-			return common.InternalServerError("dubbogo.client", err.Error())
+			return jerrors.Trace(err)
 		}
 
 		err = c.call(ctx, reqID, *serviceURL, request, response, callOpts)
@@ -325,7 +317,7 @@ func (c *rpcClient) Call(ctx context.Context, request Request, response interfac
 		select {
 		case <-ctx.Done():
 			log.Error("reqID{%d}, @i{%d}, ctx.Done(), ctx.Err:%#v", reqID, i, ctx.Err())
-			return common.NewError("dubbogo.client", fmt.Sprintf("%v", ctx.Err()), 408)
+			return jerrors.Trace(ctx.Err())
 		case err := <-ch:
 			log.Debug("reqID{%d}, err:%+v", reqID, err)
 			if err == nil || len(err.Error()) == 0 {

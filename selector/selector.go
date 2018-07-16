@@ -16,7 +16,7 @@
 package selector
 
 import (
-	"errors"
+	jerrors "github.com/juju/errors"
 )
 
 import (
@@ -43,7 +43,7 @@ type Selector interface {
 type Next func(ID int64) (*registry.ServiceURL, error)
 
 var (
-	ErrNotFound              = errors.New("not found")
-	ErrNoneAvailable         = errors.New("none available")
-	ErrRunOutAllServiceNodes = errors.New("has used out all provider nodes")
+	ErrNotFound              = jerrors.New("not found")
+	ErrNoneAvailable         = jerrors.New("none available")
+	ErrRunOutAllServiceNodes = jerrors.New("has used out all provider nodes")
 )
