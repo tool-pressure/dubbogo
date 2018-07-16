@@ -31,12 +31,6 @@ type readWriteCloser struct {
 	rbuf *bytes.Buffer
 }
 
-type response struct {
-	ServiceMethod string // echoes that of the Request
-	Seq           int64  // echoes that of the request
-	Error         string // error, if any.
-}
-
 func (rwc *readWriteCloser) Read(p []byte) (n int, err error) {
 	return rwc.rbuf.Read(p)
 }
@@ -268,11 +262,10 @@ func (h *httpClient) Recv(p *Package) error {
 	return nil
 }
 
-func (h *httpClient) ReadResponseHeader(r *response) error {
+func (h *httpClient) ReadResponseHeader(msg *Message) error {
 	var (
 		err error
 		p   Package
-		cm  Message
 	)
 
 	if h.isClosed() {
@@ -285,13 +278,7 @@ func (h *httpClient) ReadResponseHeader(r *response) error {
 		return jerrors.Trace(err)
 	}
 	h.buf.rbuf.Write(p.Body)
-	err = h.codec.ReadHeader(&cm)
-
-	r.ServiceMethod = cm.Method
-	r.Seq = cm.ID
-	r.Error = cm.Error
-
-	return jerrors.Trace(err)
+	return jerrors.Trace(h.codec.ReadHeader(msg))
 }
 
 func (h *httpClient) ReadResponseBody(b interface{}) error {

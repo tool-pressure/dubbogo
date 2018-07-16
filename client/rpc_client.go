@@ -147,7 +147,7 @@ func (c *rpcClient) call(ctx context.Context, reqID int64, service registry.Serv
 	go func() {
 		var (
 			err    error
-			rpcRsp response
+			rpcRsp Message
 		)
 		defer func() {
 			if panicMsg := recover(); panicMsg != nil {
