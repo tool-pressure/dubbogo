@@ -22,6 +22,7 @@ import (
 )
 
 import (
+	"github.com/AlexStocks/goext/net"
 	log "github.com/AlexStocks/log4go"
 	jerrors "github.com/juju/errors"
 )
@@ -55,7 +56,7 @@ var (
 
 func init() {
 	processID = fmt.Sprintf("%d", os.Getpid())
-	localIP, _ = common.GetLocalIP(localIP)
+	localIP, _ = gxnet.GetLocalIP()
 }
 
 func (t DubboType) String() string {

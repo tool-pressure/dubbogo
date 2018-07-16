@@ -16,10 +16,6 @@ import (
 	jerrors "github.com/juju/errors"
 )
 
-import (
-	"github.com/AlexStocks/dubbogo/common"
-)
-
 const (
 	PathPrefix = byte('/')
 )
@@ -39,6 +35,15 @@ func (m *Package) Reset() {
 //////////////////////////////////////////////
 // http transport client
 //////////////////////////////////////////////
+
+func SetNetConnTimeout(conn net.Conn, timeout time.Duration) {
+	t := time.Time{}
+	if timeout > time.Duration(0) {
+		t = time.Now().Add(timeout)
+	}
+
+	conn.SetReadDeadline(t)
+}
 
 type buffer struct {
 	io.ReadWriter
@@ -118,8 +123,8 @@ func (h *httpClient) Send(p *Package) error {
 	h.Unlock()
 
 	if h.timeout > time.Duration(0) {
-		common.SetNetConnTimeout(h.conn, h.timeout)
-		defer common.SetNetConnTimeout(h.conn, 0)
+		SetNetConnTimeout(h.conn, h.timeout)
+		defer SetNetConnTimeout(h.conn, 0)
 	}
 
 	reqBuf := bytes.NewBuffer(make([]byte, 0))
@@ -147,8 +152,8 @@ func (h *httpClient) Recv(p *Package) error {
 
 	// set timeout if its greater than 0
 	if h.timeout > time.Duration(0) {
-		common.SetNetConnTimeout(h.conn, h.timeout)
-		defer common.SetNetConnTimeout(h.conn, 0)
+		SetNetConnTimeout(h.conn, h.timeout)
+		defer SetNetConnTimeout(h.conn, 0)
 	}
 
 	rsp, err := http.ReadResponse(h.buff, r)

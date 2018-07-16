@@ -46,24 +46,6 @@ func Contains(s []string, e string) bool {
 	return false
 }
 
-func Future(sec int, f func()) {
-	time.AfterFunc(TimeSecondDuration(sec), f)
-}
-
-func TrimPrefix(s string, prefix string) string {
-	if strings.HasPrefix(s, prefix) {
-		s = s[len(prefix):]
-	}
-	return s
-}
-
-func TrimSuffix(s string, suffix string) string {
-	if strings.HasSuffix(s, suffix) {
-		s = s[:len(s)-len(suffix)]
-	}
-	return s
-}
-
 func Goid() int {
 	var buf [64]byte
 	n := runtime.Stack(buf[:], false)
