@@ -31,15 +31,6 @@ type readWriteCloser struct {
 	rbuf *bytes.Buffer
 }
 
-type request struct {
-	Version       string
-	ServicePath   string
-	Service       string
-	ServiceMethod string // format: "Service.Method"
-	Seq           int64  // sequence number chosen by client
-	Timeout       time.Duration
-}
-
 type response struct {
 	ServiceMethod string // echoes that of the Request
 	Seq           int64  // echoes that of the request
@@ -153,31 +144,22 @@ func (h *httpClient) isClosed() bool {
 	}
 }
 
-func (h *httpClient) WriteRequest(req *request, args interface{}) error {
+func (h *httpClient) WriteRequest(msg Message, args interface{}) error {
 	if h.isClosed() {
 		return errShutdown
 	}
 
 	h.buf.wbuf.Reset()
 
-	m := &Message{
-		ID:          req.Seq,
-		Version:     req.Version,
-		ServicePath: req.ServicePath,
-		Target:      req.Service,
-		Method:      req.ServiceMethod,
-		Timeout:     req.Timeout,
-		Header:      map[string]string{},
-	}
 	// Serialization
-	if err := h.codec.Write(m, args); err != nil {
+	if err := h.codec.Write(&msg, args); err != nil {
 		return jerrors.Trace(err)
 	}
 	// get binary stream
 	h.pkg.Body = h.buf.wbuf.Bytes()
 	// tcp 层不使用 transport.Package.Header, codec.Write 调用之后其所有内容已经序列化进 transport.Package.Body
 	if h.pkg.Header != nil {
-		for k, v := range m.Header {
+		for k, v := range msg.Header {
 			h.pkg.Header[k] = v
 		}
 	}

@@ -159,15 +159,16 @@ func (c *rpcClient) call(ctx context.Context, reqID int64, service registry.Serv
 			}
 		}()
 
-		rpcReq := request{
-			Version:       req.version,
-			ServicePath:   strings.TrimPrefix(service.Path, "/"),
-			Service:       req.ServiceConfig().(*registry.ServiceConfig).Service,
-			Seq:           reqID,
-			ServiceMethod: req.method,
-			Timeout:       reqTimeout,
+		msg := Message{
+			Version:     req.version,
+			ServicePath: strings.TrimPrefix(service.Path, "/"),
+			Target:      req.ServiceConfig().(*registry.ServiceConfig).Service,
+			ID:          reqID,
+			Method:      req.method,
+			Timeout:     reqTimeout,
+			Header:      map[string]string{},
 		}
-		if err = conn.WriteRequest(&rpcReq, req.args); err != nil {
+		if err = conn.WriteRequest(msg, req.args); err != nil {
 			ch <- err
 			return
 		}
