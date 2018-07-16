@@ -76,11 +76,6 @@ type rpcClient struct {
 	ID   int64
 	once sync.Once
 	opts Options
-
-	// gc goroutine
-	done chan empty
-	wg   sync.WaitGroup
-	gcCh chan interface{}
 }
 
 func newRPCClient(opt ...Option) Client {
@@ -90,34 +85,10 @@ func newRPCClient(opt ...Option) Client {
 	rc := &rpcClient{
 		ID:   int64(uint32(t.Second() * t.Nanosecond() * common.Goid())),
 		opts: opts,
-		done: make(chan empty),
-		gcCh: make(chan interface{}, CLEAN_CHANNEL_SIZE),
 	}
 	log.Info("client initial ID:%d", rc.ID)
-	rc.wg.Add(1)
-	go rc.gc()
 
 	return rc
-}
-
-// rpcClient garbage collector
-func (c *rpcClient) gc() {
-	defer c.wg.Done()
-LOOP:
-	for {
-		select {
-		case <-c.done:
-			log.Info("(rpcClient)gc goroutine exit now ...")
-			break LOOP
-		case obj := <-c.gcCh:
-			switch obj.(type) {
-			case *rpcCodec:
-				obj.(*rpcCodec).Close() // rpcCodec.Close->httpClient.Close
-			default:
-				log.Warn("illegal type of gc obj:%+v", obj)
-			}
-		}
-	}
 }
 
 func (r *rpcClient) next(request Request, opts CallOptions) (selector.Next, error) {
@@ -166,16 +137,11 @@ func (c *rpcClient) call(ctx context.Context, reqID int64, service registry.Serv
 		pkg.Header["Accept"] = req.contentType
 	}
 
-	conn, err := initHTTPClient(service.Location, service.Path, opts.DialTimeout)
+	conn, err := initHTTPClient(service.Location, service.Path, opts.DialTimeout, pkg, c.opts.newCodec)
 	if err != nil {
 		return jerrors.Trace(err)
 	}
 	defer conn.Close()
-
-	codec := newRPCCodec(pkg, conn, c.opts.newCodec)
-	defer func() {
-		c.gcCh <- codec
-	}()
 
 	ch := make(chan error, 1)
 	go func() {
@@ -201,12 +167,12 @@ func (c *rpcClient) call(ctx context.Context, reqID int64, service registry.Serv
 			ServiceMethod: req.method,
 			Timeout:       reqTimeout,
 		}
-		if err = codec.WriteRequest(&rpcReq, req.args); err != nil {
+		if err = conn.WriteRequest(&rpcReq, req.args); err != nil {
 			ch <- err
 			return
 		}
 
-		if err = codec.ReadResponseHeader(&rpcRsp); err != nil {
+		if err = conn.ReadResponseHeader(&rpcRsp); err != nil {
 			log.Warn("codec.ReadResponseHeader(ID{%d}, req{%#v}, rsp{%#v}) = err{%t}", reqID, req, rpcRsp, err)
 			ch <- err
 			return
@@ -219,12 +185,12 @@ func (c *rpcClient) call(ctx context.Context, reqID int64, service registry.Serv
 			} else {
 				err = jerrors.New(rpcRsp.Error)
 			}
-			if e := codec.ReadResponseBody(nil); e != nil {
+			if e := conn.ReadResponseBody(nil); e != nil {
 				err = e
 			}
 
 		default:
-			err = codec.ReadResponseBody(rsp)
+			err = conn.ReadResponseBody(rsp)
 		}
 
 		ch <- err
@@ -347,8 +313,6 @@ func (c *rpcClient) String() string {
 }
 
 func (c *rpcClient) Close() {
-	close(c.done) // notify gc() to close transport connection
-	c.wg.Wait()
 	c.once.Do(func() {
 		if c.opts.Selector != nil {
 			c.opts.Selector.Close()
