@@ -137,18 +137,13 @@ func (c *rpcClient) call(ctx context.Context, reqID int64, service registry.Serv
 	}
 
 	codec := c.opts.newCodec()
-	conn, err := initHTTPClient(service.Location, service.Path, opts.DialTimeout)
-	if err != nil {
-		return jerrors.Trace(err)
-	}
-	defer conn.Close()
 
 	ch := make(chan error, 1)
 	go func() {
 		var (
 			err    error
 			rpcReq Message
-			//rspPkg Package
+			buf    []byte
 		)
 		defer func() {
 			if panicMsg := recover(); panicMsg != nil {
@@ -175,18 +170,7 @@ func (c *rpcClient) call(ctx context.Context, reqID int64, service registry.Serv
 			return
 		}
 
-		//if err = conn.Send(pkg); err != nil {
-		//	ch <- err
-		//	return
-		//}
-		//
-		//if err = conn.Recv(&rspPkg); err != nil {
-		//	log.Warn("conn.Recv() = err{%s}", jerrors.ErrorStack(err))
-		//	ch <- err
-		//	return
-		//}
-		var buf []byte
-		if buf, err = conn.SendRecv(pkg); err != nil {
+		if buf, err = httpSendRecv(service.Location, service.Path, opts.DialTimeout, pkg); err != nil {
 			ch <- err
 			return
 		}
