@@ -45,13 +45,6 @@ type Package struct {
 	Body   []byte
 }
 
-func (m *Package) Reset() {
-	m.Body = m.Body[:0]
-	for key := range m.Header {
-		delete(m.Header, key)
-	}
-}
-
 //////////////////////////////////////////////
 // http transport client
 //////////////////////////////////////////////
@@ -83,28 +76,17 @@ type httpClient struct {
 	r    chan *http.Request
 	bl   []*http.Request
 	buff *bufio.Reader
-
-	codec Codec
-	pkg   *Package
-	buf   *readWriteCloser
 }
 
 func initHTTPClient(
 	addr string,
 	path string,
 	timeout time.Duration,
-	pkg *Package,
-	newCodec NewCodec,
 ) (*httpClient, error) {
 
 	tcpConn, err := net.DialTimeout("tcp", addr, timeout)
 	if err != nil {
 		return nil, jerrors.Trace(err)
-	}
-
-	rwc := &readWriteCloser{
-		wbuf: bytes.NewBuffer(nil),
-		rbuf: bytes.NewBuffer(nil),
 	}
 
 	return &httpClient{
@@ -114,37 +96,17 @@ func initHTTPClient(
 		timeout: timeout,
 		buff:    bufio.NewReader(tcpConn),
 		r:       make(chan *http.Request, 1),
-
-		buf:   rwc,
-		codec: newCodec(rwc),
-		pkg:   pkg,
 	}, nil
 }
 
-func (h *httpClient) WriteRequest(msg *Message) error {
-	h.buf.wbuf.Reset()
-
-	if err := h.codec.Write(msg); err != nil {
-		return jerrors.Trace(err)
-	}
-	h.pkg.Body = h.buf.wbuf.Bytes()
-	if h.pkg.Header != nil {
-		for k, v := range msg.Header {
-			h.pkg.Header[k] = v
-		}
-	}
-
-	return jerrors.Trace(h.Send())
-}
-
-func (h *httpClient) Send() error {
+func (h *httpClient) Send(pkg *Package) error {
 	header := make(http.Header)
 
-	for k, v := range h.pkg.Header {
+	for k, v := range pkg.Header {
 		header.Set(k, v)
 	}
 
-	reqB := bytes.NewBuffer(h.pkg.Body)
+	reqB := bytes.NewBuffer(pkg.Body)
 	defer reqB.Reset()
 	buf := &buffer{
 		reqB,
@@ -163,14 +125,12 @@ func (h *httpClient) Send() error {
 		Host:          h.addr,
 	}
 
-	h.Lock()
 	h.bl = append(h.bl, req)
 	select {
 	case h.r <- h.bl[0]:
 		h.bl = h.bl[1:]
 	default:
 	}
-	h.Unlock()
 
 	if h.timeout > time.Duration(0) {
 		SetNetConnTimeout(h.conn, h.timeout)
@@ -194,8 +154,6 @@ func (h *httpClient) Recv(p *Package) error {
 	}
 	r = rc
 
-	h.Lock()
-	defer h.Unlock()
 	if h.buff == nil {
 		return io.EOF
 	}
@@ -238,32 +196,8 @@ func (h *httpClient) Recv(p *Package) error {
 	return nil
 }
 
-func (h *httpClient) ReadResponseHeader(msg *Message) error {
-	var (
-		err error
-		p   Package
-	)
-
-	h.buf.rbuf.Reset()
-	err = h.Recv(&p)
-	if err != nil {
-		return jerrors.Trace(err)
-	}
-	h.buf.rbuf.Write(p.Body)
-	return jerrors.Trace(h.codec.ReadHeader(msg))
-}
-
-func (h *httpClient) ReadResponseBody(b interface{}) error {
-	return jerrors.Trace(h.codec.ReadBody(b))
-}
-
 func (h *httpClient) Close() error {
-	h.buf.Close()
-	h.codec.Close()
-	h.Lock()
 	h.buff.Reset(nil)
-	h.buff = nil
-	h.Unlock()
 	close(h.r)
 	return jerrors.Trace(h.conn.Close())
 }

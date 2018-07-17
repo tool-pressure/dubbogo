@@ -19,7 +19,6 @@ import (
 	"fmt"
 	"io"
 	"reflect"
-	"sync"
 	"time"
 )
 
@@ -132,7 +131,6 @@ type jsonClientCodec struct {
 	req  clientRequest
 	resp clientResponse
 
-	sync.Mutex
 	pending map[int64]string
 }
 
@@ -207,13 +205,10 @@ func (c *jsonClientCodec) Write(m *Message) error {
 
 	c.req.Version = VERSION
 	c.req.Method = m.Method
-	// c.req.Params = b
 	c.req.Params = param
 	c.req.ID = m.ID & MAX_JSONRPC_ID
-	c.Lock()
 	// c.pending[m.ID] = m.Method // 此处如果用m.ID会导致error: can not find method of response id 280698512
 	c.pending[c.req.ID] = m.Method
-	c.Unlock()
 
 	return c.enc.Encode(&c.req)
 }
@@ -230,16 +225,13 @@ func (c *jsonClientCodec) ReadHeader(m *Message) error {
 	}
 
 	var ok bool
-	c.Lock()
 	m.Method, ok = c.pending[c.resp.ID]
 	if !ok {
-		c.Unlock()
 		err := jerrors.Errorf("can not find method of response id %v, response error:%v", c.resp.ID, c.resp.Error)
 		log.Debug("jsonClientCodec.ReadHeader(@m{%v}) = error{%v}", m, err)
 		return err
 	}
 	delete(c.pending, c.resp.ID)
-	c.Unlock()
 
 	m.Error = ""
 	m.ID = c.resp.ID
