@@ -121,22 +121,19 @@ func (c *rpcClient) call(ctx context.Context, reqID int64, service registry.Serv
 	}
 
 	// create client package
-	pkg := &Package{}
-	pkg.Header = make(map[string]string)
+	reqHeader := make(map[string]string)
 	if md, ok := ctx.Value(common.DUBBOGO_CTX_KEY).(map[string]string); ok {
 		for k := range md {
-			pkg.Header[k] = md[k]
+			reqHeader[k] = md[k]
 		}
 
 		// set timeout in nanoseconds
-		pkg.Header["Timeout"] = fmt.Sprintf("%d", reqTimeout)
+		reqHeader["Timeout"] = fmt.Sprintf("%d", reqTimeout)
 		// set the content type for the request
-		pkg.Header["Content-Type"] = req.protocol
+		reqHeader["Content-Type"] = req.protocol
 		// set the accept header
-		pkg.Header["Accept"] = req.contentType
+		reqHeader["Accept"] = req.contentType
 	}
-
-	codec := c.opts.newCodec()
 
 	ch := make(chan error, 1)
 	go func() {
@@ -165,12 +162,14 @@ func (c *rpcClient) call(ctx context.Context, reqID int64, service registry.Serv
 			Header:      map[string]string{},
 			Args:        req.args,
 		}
-		if pkg.Body, err = codec.Write(&rpcReq); err != nil {
+		codec := c.opts.newCodec()
+		reqBody, err := codec.Write(&rpcReq)
+		if err != nil {
 			ch <- err
 			return
 		}
 
-		if buf, err = httpSendRecv(service.Location, service.Path, opts.DialTimeout, pkg); err != nil {
+		if buf, err = httpSendRecv(service.Location, service.Path, opts.DialTimeout, reqHeader, reqBody); err != nil {
 			ch <- err
 			return
 		}

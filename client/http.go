@@ -14,15 +14,6 @@ import (
 	jerrors "github.com/juju/errors"
 )
 
-const (
-	PathPrefix = byte('/')
-)
-
-type Package struct {
-	Header map[string]string
-	Body   []byte
-}
-
 //////////////////////////////////////////////
 // http transport client
 //////////////////////////////////////////////
@@ -39,17 +30,16 @@ func SetNetConnTimeout(conn net.Conn, timeout time.Duration) {
 // !!The high level of complexity and the likelihood that the fasthttp client has not been extensively used
 // in production means that you would need to expect a very large benefit to justify the adoption of fasthttp today.
 // from: http://big-elephants.com/2016-12/fasthttp-client/
-func httpSendRecv(addr, path string, timeout time.Duration, pkg *Package) ([]byte, error) {
+func httpSendRecv(addr, path string, timeout time.Duration, header map[string]string, body []byte) ([]byte, error) {
 	tcpConn, err := net.DialTimeout("tcp", addr, timeout)
 	if err != nil {
 		return nil, jerrors.Trace(err)
 	}
 	defer tcpConn.Close()
 
-	header := make(http.Header)
-
-	for k, v := range pkg.Header {
-		header.Set(k, v)
+	httpHeader := make(http.Header)
+	for k, v := range header {
+		httpHeader.Set(k, v)
 	}
 
 	req := &http.Request{
@@ -58,9 +48,9 @@ func httpSendRecv(addr, path string, timeout time.Duration, pkg *Package) ([]byt
 			Scheme: "http",
 			Path:   path,
 		},
-		Header:        header,
-		Body:          ioutil.NopCloser(bytes.NewReader(pkg.Body)),
-		ContentLength: int64(len(pkg.Body)),
+		Header:        httpHeader,
+		Body:          ioutil.NopCloser(bytes.NewReader(body)),
+		ContentLength: int64(len(body)),
 	}
 
 	if timeout > time.Duration(0) {
