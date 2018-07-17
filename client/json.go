@@ -15,6 +15,7 @@
 package client
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -23,7 +24,6 @@ import (
 )
 
 import (
-	log "github.com/AlexStocks/log4go"
 	jerrors "github.com/juju/errors"
 )
 
@@ -70,13 +70,11 @@ func GetCodecType(t string) CodecType {
 }
 
 type Codec interface {
-	ReadHeader(*Message) error
-	ReadBody(interface{}) error
-	Write(m *Message) error
-	Close() error
+	Read([]byte, interface{}) error
+	Write(m *Message) ([]byte, error)
 }
 
-type NewCodec func(io.ReadWriteCloser) Codec
+type NewCodec func() Codec
 
 type Message struct {
 	ID          int64
@@ -123,10 +121,6 @@ func (e *Error) Error() string {
 }
 
 type jsonClientCodec struct {
-	dec *json.Decoder // for reading JSON values
-	enc *json.Encoder // for writing JSON values
-	c   io.Closer
-
 	// temporary work space
 	req  clientRequest
 	resp clientResponse
@@ -155,16 +149,13 @@ func (r *clientResponse) reset() {
 	r.Error = nil
 }
 
-func newJsonClientCodec(conn io.ReadWriteCloser) Codec {
+func newJsonClientCodec() Codec {
 	return &jsonClientCodec{
-		dec:     json.NewDecoder(conn),
-		enc:     json.NewEncoder(conn),
-		c:       conn,
 		pending: make(map[int64]string),
 	}
 }
 
-func (c *jsonClientCodec) Write(m *Message) error {
+func (c *jsonClientCodec) Write(m *Message) ([]byte, error) {
 	// If return error: it will be returned as is for this call.
 	// Allow param to be only Array, Slice, Map or Struct.
 	// When param is nil or uninitialized Map or Slice - omit "params".
@@ -196,10 +187,10 @@ func (c *jsonClientCodec) Write(m *Message) error {
 				}
 			case reflect.Array, reflect.Struct:
 			default:
-				return NewError(errInternal.Code, "unsupported param type: Ptr to "+k.String())
+				return nil, NewError(errInternal.Code, "unsupported param type: Ptr to "+k.String())
 			}
 		default:
-			return NewError(errInternal.Code, "unsupported param type: "+k.String())
+			return nil, NewError(errInternal.Code, "unsupported param type: "+k.String())
 		}
 	}
 
@@ -210,25 +201,35 @@ func (c *jsonClientCodec) Write(m *Message) error {
 	// c.pending[m.ID] = m.Method // 此处如果用m.ID会导致error: can not find method of response id 280698512
 	c.pending[c.req.ID] = m.Method
 
-	return c.enc.Encode(&c.req)
-}
-
-func (c *jsonClientCodec) ReadHeader(m *Message) error {
-	c.resp.reset()
-	if err := c.dec.Decode(&c.resp); err != nil {
-		if err == io.EOF {
-			log.Debug("c.dec.Decode(c.resp{%v}) = err{%T-%v}, err == io.EOF", c.resp, err, err)
-			return err
-		}
-		log.Debug("c.dec.Decode(c.resp{%v}) = err{%T-%v}, err != io.EOF", c.resp, err, err)
-		return NewError(errInternal.Code, err.Error())
+	buf := bytes.NewBuffer(nil)
+	enc := json.NewEncoder(buf)
+	if err := enc.Encode(&c.req); err != nil {
+		return nil, jerrors.Trace(err)
 	}
 
-	var ok bool
+	return buf.Bytes(), nil
+}
+
+func (c *jsonClientCodec) Read(streamBytes []byte, x interface{}) error {
+	c.resp.reset()
+
+	buf := bytes.NewBuffer(streamBytes)
+	dec := json.NewDecoder(buf)
+	if err := dec.Decode(&c.resp); err != nil {
+		if err != io.EOF {
+			err = NewError(errInternal.Code, err.Error())
+		}
+		return err
+	}
+
+	var (
+		ok  bool
+		err error
+		m   Message
+	)
 	m.Method, ok = c.pending[c.resp.ID]
 	if !ok {
 		err := jerrors.Errorf("can not find method of response id %v, response error:%v", c.resp.ID, c.resp.Error)
-		log.Debug("jsonClientCodec.ReadHeader(@m{%v}) = error{%v}", m, err)
 		return err
 	}
 	delete(c.pending, c.resp.ID)
@@ -237,19 +238,10 @@ func (c *jsonClientCodec) ReadHeader(m *Message) error {
 	m.ID = c.resp.ID
 	if c.resp.Error != nil {
 		m.Error = c.resp.Error.Error()
+		err = jerrors.New(m.Error)
+	} else {
+		err = json.Unmarshal(*c.resp.Result, x)
 	}
 
-	return nil
-}
-
-func (c *jsonClientCodec) ReadBody(x interface{}) error {
-	if x == nil || c.resp.Result == nil {
-		return nil
-	}
-
-	return jerrors.Trace(json.Unmarshal(*c.resp.Result, x))
-}
-
-func (c *jsonClientCodec) Close() error {
-	return jerrors.Trace(c.c.Close())
+	return err
 }

@@ -16,10 +16,8 @@
 package client
 
 import (
-	"bytes"
 	"context"
 	"fmt"
-	"io"
 	"strconv"
 	"strings"
 	"sync"
@@ -138,16 +136,7 @@ func (c *rpcClient) call(ctx context.Context, reqID int64, service registry.Serv
 		pkg.Header["Accept"] = req.contentType
 	}
 
-	rwc := &readWriteCloser{
-		wbuf: bytes.NewBuffer(nil),
-		rbuf: bytes.NewBuffer(nil),
-	}
-	codec := c.opts.newCodec(rwc)
-	defer func() {
-		codec.Close()
-		rwc.Close()
-	}()
-
+	codec := c.opts.newCodec()
 	conn, err := initHTTPClient(service.Location, service.Path, opts.DialTimeout)
 	if err != nil {
 		return jerrors.Trace(err)
@@ -158,7 +147,6 @@ func (c *rpcClient) call(ctx context.Context, reqID int64, service registry.Serv
 	go func() {
 		var (
 			err    error
-			rpcRsp Message
 			rpcReq Message
 			rspPkg Package
 		)
@@ -182,11 +170,10 @@ func (c *rpcClient) call(ctx context.Context, reqID int64, service registry.Serv
 			Header:      map[string]string{},
 			Args:        req.args,
 		}
-		if err = codec.Write(&rpcReq); err != nil {
+		if pkg.Body, err = codec.Write(&rpcReq); err != nil {
 			ch <- err
 			return
 		}
-		pkg.Body = rwc.wbuf.Bytes()
 
 		if err = conn.Send(pkg); err != nil {
 			ch <- err
@@ -198,29 +185,7 @@ func (c *rpcClient) call(ctx context.Context, reqID int64, service registry.Serv
 			ch <- err
 			return
 		}
-		rwc.rbuf.Write(rspPkg.Body)
-		if err = codec.ReadHeader(&rpcRsp); err != nil {
-			log.Warn("codec.ReadHeader(ID{%d}, req{%#v}) = err{%s}", reqID, req, jerrors.ErrorStack(err))
-			ch <- err
-			return
-		}
-		err = nil
-		switch {
-		case len(rpcRsp.Error) > 0:
-			if rpcRsp.Error == lastStreamResponseError {
-				err = io.EOF
-			} else {
-				err = jerrors.New(rpcRsp.Error)
-			}
-			if e := codec.ReadBody(nil); e != nil {
-				err = e
-			}
-
-		default:
-			err = codec.ReadBody(rsp)
-		}
-
-		ch <- err
+		ch <- codec.Read(rspPkg.Body, rsp)
 	}()
 
 	select {
