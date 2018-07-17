@@ -148,7 +148,7 @@ func (c *rpcClient) call(ctx context.Context, reqID int64, service registry.Serv
 		var (
 			err    error
 			rpcReq Message
-			rspPkg Package
+			//rspPkg Package
 		)
 		defer func() {
 			if panicMsg := recover(); panicMsg != nil {
@@ -175,17 +175,22 @@ func (c *rpcClient) call(ctx context.Context, reqID int64, service registry.Serv
 			return
 		}
 
-		if err = conn.Send(pkg); err != nil {
+		//if err = conn.Send(pkg); err != nil {
+		//	ch <- err
+		//	return
+		//}
+		//
+		//if err = conn.Recv(&rspPkg); err != nil {
+		//	log.Warn("conn.Recv() = err{%s}", jerrors.ErrorStack(err))
+		//	ch <- err
+		//	return
+		//}
+		var buf []byte
+		if buf, err = conn.SendRecv(pkg); err != nil {
 			ch <- err
 			return
 		}
-
-		if err = conn.Recv(&rspPkg); err != nil {
-			log.Warn("conn.Recv() = err{%s}", jerrors.ErrorStack(err))
-			ch <- err
-			return
-		}
-		ch <- codec.Read(rspPkg.Body, rsp)
+		ch <- codec.Read(buf, rsp)
 	}()
 
 	select {

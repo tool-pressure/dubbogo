@@ -202,6 +202,7 @@ func (c *jsonClientCodec) Write(m *Message) ([]byte, error) {
 	c.pending[c.req.ID] = m.Method
 
 	buf := bytes.NewBuffer(nil)
+	defer buf.Reset()
 	enc := json.NewEncoder(buf)
 	if err := enc.Encode(&c.req); err != nil {
 		return nil, jerrors.Trace(err)
@@ -214,6 +215,7 @@ func (c *jsonClientCodec) Read(streamBytes []byte, x interface{}) error {
 	c.resp.reset()
 
 	buf := bytes.NewBuffer(streamBytes)
+	defer buf.Reset()
 	dec := json.NewDecoder(buf)
 	if err := dec.Decode(&c.resp); err != nil {
 		if err != io.EOF {

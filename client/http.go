@@ -8,12 +8,13 @@ import (
 	"net"
 	"net/http"
 	"net/url"
-	"sync"
 	"time"
 )
 
 import (
+	"github.com/AlexStocks/goext/log"
 	jerrors "github.com/juju/errors"
+	"github.com/valyala/fasthttp"
 )
 
 const (
@@ -38,11 +39,11 @@ func SetNetConnTimeout(conn net.Conn, timeout time.Duration) {
 	conn.SetReadDeadline(t)
 }
 
-type buffer struct {
+type bufer struct {
 	io.ReadWriter
 }
 
-func (b *buffer) Close() error {
+func (b *bufer) Close() error {
 	return nil
 }
 
@@ -51,19 +52,10 @@ type httpClient struct {
 	addr    string
 	path    string
 	timeout time.Duration
-
-	sync.Mutex
-	r    chan *http.Request
-	bl   []*http.Request
-	buff *bufio.Reader
+	req     *http.Request
 }
 
-func initHTTPClient(
-	addr string,
-	path string,
-	timeout time.Duration,
-) (*httpClient, error) {
-
+func initHTTPClient(addr, path string, timeout time.Duration) (*httpClient, error) {
 	tcpConn, err := net.DialTimeout("tcp", addr, timeout)
 	if err != nil {
 		return nil, jerrors.Trace(err)
@@ -74,8 +66,6 @@ func initHTTPClient(
 		addr:    addr,
 		path:    path,
 		timeout: timeout,
-		buff:    bufio.NewReader(tcpConn),
-		r:       make(chan *http.Request, 1),
 	}, nil
 }
 
@@ -88,28 +78,21 @@ func (h *httpClient) Send(pkg *Package) error {
 
 	reqB := bytes.NewBuffer(pkg.Body)
 	defer reqB.Reset()
-	buf := &buffer{
+	buf := &bufer{
 		reqB,
 	}
 
-	req := &http.Request{
+	h.req = &http.Request{
 		Method: "POST",
 		URL: &url.URL{
 			Scheme: "http",
 			Host:   h.addr,
 			Path:   h.path,
 		},
-		Header:        header, // p.header
-		Body:          buf,    // p.body
+		Header:        header,
+		Body:          buf,
 		ContentLength: int64(reqB.Len()),
 		Host:          h.addr,
-	}
-
-	h.bl = append(h.bl, req)
-	select {
-	case h.r <- h.bl[0]:
-		h.bl = h.bl[1:]
-	default:
 	}
 
 	if h.timeout > time.Duration(0) {
@@ -118,7 +101,7 @@ func (h *httpClient) Send(pkg *Package) error {
 	}
 
 	reqBuf := bytes.NewBuffer(make([]byte, 0))
-	err := req.Write(reqBuf)
+	err := h.req.Write(reqBuf)
 	if err == nil {
 		_, err = reqBuf.WriteTo(h.conn)
 	}
@@ -126,25 +109,54 @@ func (h *httpClient) Send(pkg *Package) error {
 	return jerrors.Trace(err)
 }
 
+func (h *httpClient) SendRecv(pkg *Package) ([]byte, error) {
+	var (
+		err      error
+		rspBytes []byte
+		req      *fasthttp.Request
+		rsp      *fasthttp.Response
+	)
+	c := &fasthttp.HostClient{
+		//Addr: h.addr,
+		//Dial: func(addr string) (net.Conn, error) {
+		//	return net.DialTimeout("tcp", addr, h.timeout)
+		//},
+		//ReadTimeout:  h.timeout,
+		//WriteTimeout: h.timeout,
+	}
+	req = fasthttp.AcquireRequest()
+	req.Header.SetMethod("POST")
+	for k, v := range pkg.Header {
+		req.Header.Set(k, v)
+	}
+	req.SetHost(h.addr)
+	req.SetRequestURI(h.path)
+	req.SetBody(pkg.Body)
+	gxlog.CError("request header:%s", req.Header.String())
+	rsp = fasthttp.AcquireResponse()
+	defer func() {
+		fasthttp.ReleaseResponse(rsp)
+		fasthttp.ReleaseRequest(req)
+	}()
+
+	if err = c.Do(req, rsp); err != nil {
+		return nil, jerrors.Trace(err)
+	}
+	if rsp.StatusCode() != 200 {
+		return nil, jerrors.New(http.StatusText(rsp.StatusCode()) + ": " + string(rsp.Body()))
+	}
+
+	return append(rspBytes, rsp.Body()...), nil
+}
+
 func (h *httpClient) Recv(p *Package) error {
-	var r *http.Request
-	rc, ok := <-h.r
-	if !ok {
-		return io.EOF
-	}
-	r = rc
-
-	if h.buff == nil {
-		return io.EOF
-	}
-
 	// set timeout if its greater than 0
 	if h.timeout > time.Duration(0) {
 		SetNetConnTimeout(h.conn, h.timeout)
 		defer SetNetConnTimeout(h.conn, 0)
 	}
 
-	rsp, err := http.ReadResponse(h.buff, r)
+	rsp, err := http.ReadResponse(bufio.NewReader(h.conn), h.req)
 	if err != nil {
 		return jerrors.Trace(err)
 	}
@@ -177,7 +189,5 @@ func (h *httpClient) Recv(p *Package) error {
 }
 
 func (h *httpClient) Close() error {
-	h.buff.Reset(nil)
-	close(h.r)
 	return jerrors.Trace(h.conn.Close())
 }
