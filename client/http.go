@@ -3,15 +3,16 @@ package client
 import (
 	"bufio"
 	"bytes"
+	"fmt"
 	"io/ioutil"
 	"net"
 	"net/http"
 	"net/url"
+	"strings"
 	"time"
 )
 
 import (
-	"fmt"
 	jerrors "github.com/juju/errors"
 )
 
@@ -44,11 +45,14 @@ func httpSendRecv(addr, path string, timeout time.Duration, header map[string]st
 	}
 
 	reqBuf := bytes.NewBuffer(make([]byte, 0))
+	u := url.URL{Host: strings.TrimSuffix(addr, ":"), Path: path}
 	httpReq := &http.Request{
 		Method: "POST",
-		URL:    &url.URL{Path: path},
+		URL:    &u,
+		Proto:  "HTTP/1.1",
 		Header: httpHeader,
 		Body:   ioutil.NopCloser(bytes.NewReader(body)),
+		Host:   u.Host,
 	}
 	if err := httpReq.Write(reqBuf); err != nil {
 		return nil, jerrors.Trace(err)

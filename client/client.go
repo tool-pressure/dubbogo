@@ -32,7 +32,7 @@ type Request interface {
 }
 
 type Client interface {
-	NewRequest(group, version, service, method string, args interface{}, reqOpts ...RequestOption) Request
+	NewRequest(group, version, service, method string, args interface{}) Request
 	Call(ctx context.Context, req Request, rsp interface{}, opts ...CallOption) error
 	Close()
 }
@@ -42,16 +42,12 @@ type (
 	Option func(*Options)
 	// CallOption used by Call or Stream
 	CallOption func(*CallOptions)
-	// RequestOption used by NewRequest
-	RequestOption func(*RequestOptions)
 )
 
-type (
-	dubbogoClientConfig struct {
-		codecType CodecType
-		newCodec  NewCodec
-	}
-)
+type dubbogoClientConfig struct {
+	codecType CodecType
+	newCodec  NewCodec
+}
 
 var (
 	// DefaultRetries is the default number of times a request is tried

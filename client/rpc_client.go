@@ -47,7 +47,6 @@ type rpcRequest struct {
 	method      string
 	args        interface{}
 	contentType string
-	opts        RequestOptions
 }
 
 func (r *rpcRequest) ServiceConfig() registry.ServiceConfigIf {
@@ -65,8 +64,8 @@ func (r *rpcRequest) ServiceConfig() registry.ServiceConfigIf {
 
 // thread safe
 type rpcClient struct {
+	sync.Mutex
 	ID   int64
-	once sync.Once
 	opts Options
 }
 
@@ -94,7 +93,7 @@ func (r *rpcClient) next(request Request, opts CallOptions) (selector.Next, erro
 }
 
 func (c *rpcClient) httpCall(dialTimeout time.Duration, service registry.ServiceURL, reqParam CodecData,
-	header map[string]string, ch chan error, rsp interface{}) {
+	header map[string]string, ch chan<- error, rsp interface{}) {
 	defer func() {
 		if panicMsg := recover(); panicMsg != nil {
 			if msg, ok := panicMsg.(string); ok {
@@ -254,14 +253,8 @@ func (c *rpcClient) Options() Options {
 	return c.opts
 }
 
-func (c *rpcClient) NewRequest(group, version, service, method string, args interface{}, reqOpts ...RequestOption) Request {
+func (c *rpcClient) NewRequest(group, version, service, method string, args interface{}) Request {
 	codecType := c.opts.CodecType.String()
-
-	var opts RequestOptions
-	for _, o := range reqOpts {
-		o(&opts)
-	}
-
 	return &rpcRequest{
 		group:       group,
 		protocol:    codecType,
@@ -270,7 +263,6 @@ func (c *rpcClient) NewRequest(group, version, service, method string, args inte
 		method:      method,
 		args:        args,
 		contentType: codec2ContentType[codecType],
-		opts:        opts,
 	}
 }
 
@@ -279,14 +271,14 @@ func (c *rpcClient) String() string {
 }
 
 func (c *rpcClient) Close() {
-	c.once.Do(func() {
-		if c.opts.Selector != nil {
-			c.opts.Selector.Close()
-			c.opts.Selector = nil
-		}
-		if c.opts.Registry != nil {
-			c.opts.Registry.Close()
-			c.opts.Registry = nil
-		}
-	})
+	c.Lock()
+	defer c.Unlock()
+	if c.opts.Selector != nil {
+		c.opts.Selector.Close()
+		c.opts.Selector = nil
+	}
+	if c.opts.Registry != nil {
+		c.opts.Registry.Close()
+		c.opts.Registry = nil
+	}
 }
