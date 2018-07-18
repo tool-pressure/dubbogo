@@ -35,10 +35,6 @@ import (
 	"github.com/AlexStocks/dubbogo/selector"
 )
 
-const (
-	CLEAN_CHANNEL_SIZE = 64
-)
-
 //////////////////////////////////////////////
 // RPC Request
 //////////////////////////////////////////////
@@ -97,6 +93,33 @@ func (r *rpcClient) next(request Request, opts CallOptions) (selector.Next, erro
 	return r.opts.Selector.Select(request.ServiceConfig())
 }
 
+func (c *rpcClient) httpCall(dialTimeout time.Duration, service registry.ServiceURL, reqParam CodecData,
+	header map[string]string, ch chan error, rsp interface{}) {
+	defer func() {
+		if panicMsg := recover(); panicMsg != nil {
+			if msg, ok := panicMsg.(string); ok {
+				ch <- jerrors.New(strconv.Itoa(int(reqParam.ID)) + " request error, panic msg:" + msg)
+			} else {
+				ch <- jerrors.New("request error")
+			}
+		}
+	}()
+
+	codec := c.opts.newCodec()
+	reqBody, err := codec.Write(&reqParam)
+	if err != nil {
+		ch <- jerrors.Trace(err)
+		return
+	}
+
+	buf, err := httpSendRecv(service.Location, service.Path, dialTimeout, header, reqBody)
+	if err != nil {
+		ch <- jerrors.Trace(err)
+		return
+	}
+	ch <- jerrors.Trace(codec.Read(buf, rsp))
+}
+
 func (c *rpcClient) call(ctx context.Context, reqID int64, service registry.ServiceURL,
 	cltRequest Request, rsp interface{}, opts CallOptions) error {
 	req, ok := cltRequest.(*rpcRequest)
@@ -132,38 +155,13 @@ func (c *rpcClient) call(ctx context.Context, reqID int64, service registry.Serv
 		reqHeader["Accept"] = req.contentType
 	}
 
+	reqParam := CodecData{
+		ID:     reqID,
+		Method: req.method,
+		Args:   req.args,
+	}
 	ch := make(chan error, 1)
-	go func() {
-		defer func() {
-			if panicMsg := recover(); panicMsg != nil {
-				if msg, ok := panicMsg.(string); ok {
-					ch <- jerrors.New(strconv.Itoa(int(reqID)) + " request error, panic msg:" + msg)
-				} else {
-					ch <- jerrors.New("request error")
-				}
-			}
-		}()
-
-		reqParam := CodecData{
-			ID:     reqID,
-			Method: req.method,
-			Args:   req.args,
-		}
-		codec := c.opts.newCodec()
-		reqBody, err := codec.Write(&reqParam)
-		if err != nil {
-			ch <- err
-			return
-		}
-
-		buf, err := httpSendRecv(service.Location, service.Path, opts.DialTimeout, reqHeader, reqBody)
-		if err != nil {
-			ch <- err
-			return
-		}
-		ch <- codec.Read(buf, rsp)
-	}()
-
+	go c.httpCall(opts.DialTimeout, service, reqParam, reqHeader, ch, rsp)
 	select {
 	case err := <-ch:
 		return jerrors.Trace(err)

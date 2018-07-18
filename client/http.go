@@ -11,6 +11,7 @@ import (
 )
 
 import (
+	"fmt"
 	jerrors "github.com/juju/errors"
 )
 
@@ -42,15 +43,15 @@ func httpSendRecv(addr, path string, timeout time.Duration, header map[string]st
 		httpHeader.Set(k, v)
 	}
 
-	req := &http.Request{
+	reqBuf := bytes.NewBuffer(make([]byte, 0))
+	httpReq := &http.Request{
 		Method: "POST",
-		URL: &url.URL{
-			Scheme: "http",
-			Path:   path,
-		},
-		Header:        httpHeader,
-		Body:          ioutil.NopCloser(bytes.NewReader(body)),
-		ContentLength: int64(len(body)),
+		URL:    &url.URL{Path: path},
+		Header: httpHeader,
+		Body:   ioutil.NopCloser(bytes.NewReader(body)),
+	}
+	if err := httpReq.Write(reqBuf); err != nil {
+		return nil, jerrors.Trace(err)
 	}
 
 	if timeout > time.Duration(0) {
@@ -58,31 +59,24 @@ func httpSendRecv(addr, path string, timeout time.Duration, header map[string]st
 		defer SetNetConnTimeout(tcpConn, 0)
 	}
 
-	reqBuf := bytes.NewBuffer(make([]byte, 0))
-	if err := req.Write(reqBuf); err != nil {
-		return nil, jerrors.Trace(err)
-	}
-
 	if _, err := reqBuf.WriteTo(tcpConn); err != nil {
 		return nil, jerrors.Trace(err)
 	}
 
-	rsp, err := http.ReadResponse(bufio.NewReader(tcpConn), req)
+	httpRsp, err := http.ReadResponse(bufio.NewReader(tcpConn), httpReq)
 	if err != nil {
 		return nil, jerrors.Trace(err)
 	}
-	defer rsp.Body.Close()
+	defer httpRsp.Body.Close()
 
-	b, err := ioutil.ReadAll(rsp.Body)
+	b, err := ioutil.ReadAll(httpRsp.Body)
 	if err != nil {
 		return nil, jerrors.Trace(err)
 	}
 
-	if rsp.StatusCode != 200 {
-		return nil, jerrors.New(rsp.Status + ": " + string(b))
+	if httpRsp.StatusCode != http.StatusOK {
+		return nil, jerrors.New(fmt.Sprintf("http status:%q, error string:%q", httpRsp.Status, string(b)))
 	}
 
-	var rspBytes []byte
-
-	return append(rspBytes, b...), nil
+	return b, nil
 }

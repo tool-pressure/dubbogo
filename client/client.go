@@ -27,19 +27,14 @@ import (
 	"github.com/AlexStocks/dubbogo/selector/cache"
 )
 
-// Client is the interface used to make requests to services.
-// It supports Request/Response via Transport and Publishing via the Broker.
-// It also supports bidirectional streaming of requests.
-type Client interface {
-	Options() Options
-	NewRequest(group, version, service, method string, args interface{}, reqOpts ...RequestOption) Request
-	Call(ctx context.Context, req Request, rsp interface{}, opts ...CallOption) error
-	String() string
-	Close()
-}
-
 type Request interface {
 	ServiceConfig() registry.ServiceConfigIf
+}
+
+type Client interface {
+	NewRequest(group, version, service, method string, args interface{}, reqOpts ...RequestOption) Request
+	Call(ctx context.Context, req Request, rsp interface{}, opts ...CallOption) error
+	Close()
 }
 
 type (
