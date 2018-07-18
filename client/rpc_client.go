@@ -19,7 +19,6 @@ import (
 	"context"
 	"fmt"
 	"strconv"
-	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -67,8 +66,6 @@ func (r *rpcRequest) ServiceConfig() registry.ServiceConfigIf {
 //////////////////////////////////////////////
 // RPC Client
 //////////////////////////////////////////////
-
-type empty struct{}
 
 // thread safe
 type rpcClient struct {
@@ -137,11 +134,6 @@ func (c *rpcClient) call(ctx context.Context, reqID int64, service registry.Serv
 
 	ch := make(chan error, 1)
 	go func() {
-		var (
-			err    error
-			rpcReq Message
-			buf    []byte
-		)
 		defer func() {
 			if panicMsg := recover(); panicMsg != nil {
 				if msg, ok := panicMsg.(string); ok {
@@ -152,24 +144,20 @@ func (c *rpcClient) call(ctx context.Context, reqID int64, service registry.Serv
 			}
 		}()
 
-		rpcReq = Message{
-			Version:     req.version,
-			ServicePath: strings.TrimPrefix(service.Path, "/"),
-			Target:      req.ServiceConfig().(*registry.ServiceConfig).Service,
-			ID:          reqID,
-			Method:      req.method,
-			Timeout:     reqTimeout,
-			Header:      map[string]string{},
-			Args:        req.args,
+		reqParam := CodecData{
+			ID:     reqID,
+			Method: req.method,
+			Args:   req.args,
 		}
 		codec := c.opts.newCodec()
-		reqBody, err := codec.Write(&rpcReq)
+		reqBody, err := codec.Write(&reqParam)
 		if err != nil {
 			ch <- err
 			return
 		}
 
-		if buf, err = httpSendRecv(service.Location, service.Path, opts.DialTimeout, reqHeader, reqBody); err != nil {
+		buf, err := httpSendRecv(service.Location, service.Path, opts.DialTimeout, reqHeader, reqBody)
+		if err != nil {
 			ch <- err
 			return
 		}

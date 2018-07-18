@@ -1,16 +1,25 @@
 // Copyright (c) 2016 ~ 2018, Alex Stocks.
+// Copyright (c) 2015 Alex Efros.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
+// The MIT License (MIT)
 //
-//     http://www.apache.org/licenses/LICENSE-2.0
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
 //
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+// The above copyright notice and this permission notice shall be included in all
+// copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
 
 package client
 
@@ -20,7 +29,6 @@ import (
 	"fmt"
 	"io"
 	"reflect"
-	"time"
 )
 
 import (
@@ -71,61 +79,35 @@ func GetCodecType(t string) CodecType {
 
 type Codec interface {
 	Read([]byte, interface{}) error
-	Write(m *Message) ([]byte, error)
+	Write(*CodecData) ([]byte, error)
 }
 
 type NewCodec func() Codec
 
-type Message struct {
-	ID          int64
-	Version     string
-	ServicePath string // service path
-	Target      string // Service
-	Method      string
-	Timeout     time.Duration // request timeout
-	Header      map[string]string
-	Args        interface{}
-	BodyLen     int
-	Error       string
+type CodecData struct {
+	ID     int64
+	Method string
+	Args   interface{}
+	Error  string
 }
 
-var (
-	// Actual returned error may have different message.
-	errInternal    = NewError(-32603, "Internal error")
-	errServerError = NewError(-32001, "jsonrpc2.Error: json.Marshal failed")
-)
-
-// Error represent JSON-RPC 2.0 "Error object".
+// response Error
 type Error struct {
 	Code    int         `json:"code"`
 	Message string      `json:"message"`
 	Data    interface{} `json:"data,omitempty"`
 }
 
-// NewError returns an Error with given code and message.
-func NewError(code int, message string) *Error {
-	return &Error{Code: code, Message: message}
-}
-
-// Error returns JSON representation of Error.
 func (e *Error) Error() string {
 	buf, err := json.Marshal(e)
 	if err != nil {
 		msg, err := json.Marshal(err.Error())
 		if err != nil {
-			msg = []byte(`"` + errServerError.Message + `"`)
+			msg = []byte("jsonrpc2.Error: json.Marshal failed")
 		}
-		return fmt.Sprintf(`{"code":%d,"message":%s}`, errServerError.Code, string(msg))
+		return fmt.Sprintf(`{"code":%d,"message":%s}`, -32001, string(msg))
 	}
 	return string(buf)
-}
-
-type jsonClientCodec struct {
-	// temporary work space
-	req  clientRequest
-	resp clientResponse
-
-	pending map[int64]string
 }
 
 type clientRequest struct {
@@ -146,7 +128,14 @@ func (r *clientResponse) reset() {
 	r.Version = ""
 	r.ID = 0
 	r.Result = nil
-	r.Error = nil
+}
+
+type jsonClientCodec struct {
+	// temporary work space
+	req clientRequest
+	rsp clientResponse
+
+	pending map[int64]string
 }
 
 func newJsonClientCodec() Codec {
@@ -155,11 +144,11 @@ func newJsonClientCodec() Codec {
 	}
 }
 
-func (c *jsonClientCodec) Write(m *Message) ([]byte, error) {
+func (c *jsonClientCodec) Write(d *CodecData) ([]byte, error) {
 	// If return error: it will be returned as is for this call.
 	// Allow param to be only Array, Slice, Map or Struct.
 	// When param is nil or uninitialized Map or Slice - omit "params".
-	param := m.Args
+	param := d.Args
 	if param != nil {
 		switch k := reflect.TypeOf(param).Kind(); k {
 		case reflect.Map:
@@ -187,19 +176,19 @@ func (c *jsonClientCodec) Write(m *Message) ([]byte, error) {
 				}
 			case reflect.Array, reflect.Struct:
 			default:
-				return nil, NewError(errInternal.Code, "unsupported param type: Ptr to "+k.String())
+				return nil, jerrors.New("unsupported param type: Ptr to " + k.String())
 			}
 		default:
-			return nil, NewError(errInternal.Code, "unsupported param type: "+k.String())
+			return nil, jerrors.New("unsupported param type: " + k.String())
 		}
 	}
 
-	c.req.Version = VERSION
-	c.req.Method = m.Method
+	c.req.Version = "2.0"
+	c.req.Method = d.Method
 	c.req.Params = param
-	c.req.ID = m.ID & MAX_JSONRPC_ID
-	// c.pending[m.ID] = m.Method // 此处如果用m.ID会导致error: can not find method of response id 280698512
-	c.pending[c.req.ID] = m.Method
+	c.req.ID = d.ID & MAX_JSONRPC_ID
+	// can not use d.ID. otherwise you will get error: can not find method of rsponse id 280698512
+	c.pending[c.req.ID] = d.Method
 
 	buf := bytes.NewBuffer(nil)
 	defer buf.Reset()
@@ -212,38 +201,29 @@ func (c *jsonClientCodec) Write(m *Message) ([]byte, error) {
 }
 
 func (c *jsonClientCodec) Read(streamBytes []byte, x interface{}) error {
-	c.resp.reset()
+	c.rsp.reset()
 
 	buf := bytes.NewBuffer(streamBytes)
 	defer buf.Reset()
 	dec := json.NewDecoder(buf)
-	if err := dec.Decode(&c.resp); err != nil {
+	if err := dec.Decode(&c.rsp); err != nil {
 		if err != io.EOF {
-			err = NewError(errInternal.Code, err.Error())
+			err = jerrors.Trace(err)
 		}
 		return err
 	}
 
-	var (
-		ok  bool
-		err error
-		m   Message
-	)
-	m.Method, ok = c.pending[c.resp.ID]
+	_, ok := c.pending[c.rsp.ID]
 	if !ok {
-		err := jerrors.Errorf("can not find method of response id %v, response error:%v", c.resp.ID, c.resp.Error)
+		err := jerrors.Errorf("can not find method of rsponse id %v, rsponse error:%v", c.rsp.ID, c.rsp.Error)
 		return err
 	}
-	delete(c.pending, c.resp.ID)
+	delete(c.pending, c.rsp.ID)
 
-	m.Error = ""
-	m.ID = c.resp.ID
-	if c.resp.Error != nil {
-		m.Error = c.resp.Error.Error()
-		err = jerrors.New(m.Error)
-	} else {
-		err = json.Unmarshal(*c.resp.Result, x)
+	// c.rsp.ID
+	if c.rsp.Error != nil {
+		return jerrors.New(c.rsp.Error.Error())
 	}
 
-	return err
+	return jerrors.Trace(json.Unmarshal(*c.rsp.Result, x))
 }
